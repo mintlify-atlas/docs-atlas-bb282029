@@ -1,0 +1,215 @@
+---
+title: docker
+description: Manage Docker containers, images, volumes and networks
+---
+
+Manage Docker containers, volumes and networks. These operations allow you to manage Docker from the view of the current inventory host.
+
+## Functions
+
+### `docker.container`
+
+Manage Docker containers.
+
+```python
+docker.container(
+    container,
+    image="",
+    ports=None,
+    networks=None,
+    volumes=None,
+    env_vars=None,
+    labels=None,
+    pull_always=False,
+    present=True,
+    force=False,
+    start=True,
+    restart_policy=None,
+    auto_remove=False,
+)
+```
+
+<ParamField name="container" type="str" required>
+  Name to identify the container
+</ParamField>
+
+<ParamField name="image" type="str" default="">
+  Container image and tag ex: nginx:alpine
+</ParamField>
+
+<ParamField name="ports" type="list[str]" default="None">
+  Port list to expose
+</ParamField>
+
+<ParamField name="networks" type="list[str]" default="None">
+  Network list to attach on container
+</ParamField>
+
+<ParamField name="volumes" type="list[str]" default="None">
+  Volume list to map on container
+</ParamField>
+
+<ParamField name="env_vars" type="list[str]" default="None">
+  Environment variable list to inject on container
+</ParamField>
+
+<ParamField name="pull_always" type="bool" default="False">
+  Force image pull
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the container should be up and running
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Remove a container with same name and create a new one
+</ParamField>
+
+<ParamField name="start" type="bool" default="True">
+  Start or stop the container
+</ParamField>
+
+<ParamField name="restart_policy" type="str" default="None">
+  Restart policy to apply when a container exits
+</ParamField>
+
+<ParamField name="auto_remove" type="bool" default="False">
+  Automatically remove the container and its associated anonymous volumes when it exits
+</ParamField>
+
+### `docker.image`
+
+Manage Docker images.
+
+```python
+docker.image(
+    image,
+    present=True,
+    force=False,
+)
+```
+
+<ParamField name="image" type="str" required>
+  Image and tag ex: nginx:alpine
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the Docker image should exist
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Always pull the image if present is True
+</ParamField>
+
+### `docker.volume`
+
+Manage Docker volumes.
+
+```python
+docker.volume(
+    volume,
+    driver="",
+    labels=None,
+    present=True,
+)
+```
+
+<ParamField name="volume" type="str" required>
+  Volume name
+</ParamField>
+
+<ParamField name="driver" type="str" default="">
+  Docker volume storage driver
+</ParamField>
+
+<ParamField name="labels" type="list[str]" default="None">
+  Label list to attach in the volume
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the Docker volume should exist
+</ParamField>
+
+### `docker.network`
+
+Manage docker networks.
+
+```python
+docker.network(
+    network,
+    driver="",
+    gateway="",
+    subnet="",
+    labels=None,
+    ingress=False,
+    attachable=False,
+    present=True,
+)
+```
+
+<ParamField name="network" type="str" required>
+  Network name
+</ParamField>
+
+<ParamField name="driver" type="str" default="">
+  Network driver ex: bridge or overlay
+</ParamField>
+
+<ParamField name="gateway" type="str" default="">
+  IPv4 or IPv6 Gateway for the master subnet
+</ParamField>
+
+<ParamField name="subnet" type="str" default="">
+  Subnet in CIDR format that represents a network segment
+</ParamField>
+
+<ParamField name="attachable" type="bool" default="False">
+  Enable manual container attachment
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the Docker network should exist
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import docker
+
+# Run a container
+docker.container(
+    name="Deploy Nginx container",
+    container="nginx",
+    image="nginx:alpine",
+    ports=["80:80"],
+    present=True,
+    force=True,
+    networks=["proxy", "services"],
+    volumes=["nginx_data:/usr/share/nginx/html"],
+    pull_always=True,
+    restart_policy="unless-stopped",
+    auto_remove=True,
+)
+
+# Pull a Docker image
+docker.image(
+    name="Pull nginx image",
+    image="nginx:alpine",
+    present=True,
+)
+
+# Create a Docker volume
+docker.volume(
+    name="Create nginx volume",
+    volume="nginx_data",
+    present=True,
+)
+
+# Create Docker network
+docker.network(
+    name="Create proxy network",
+    network="proxy",
+    attachable=True,
+    present=True,
+)
+```

@@ -1,80 +1,472 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Deploy your first infrastructure with pyinfra in minutes"
 ---
 
-## Get started in three steps
+This guide will walk you through installing pyinfra and running your first deployment. You'll learn the core workflow and deploy a simple web server configuration.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **Python 3.10 or higher** installed
+- **SSH access** to a server (or use Docker/local execution)
+- Basic familiarity with Python and command line
 
-### Step 2: Deploy your changes
+<Tip>
+Don't have a server? No problem! You can use `@docker/ubuntu` or `@local` to test pyinfra on your local machine.
+</Tip>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
+## Installation
+
+Install pyinfra using your preferred package manager:
+
+<CodeGroup>
+```bash uv
+uv tool install pyinfra
+```
+
+```bash pip
+pip install pyinfra
+```
+
+```bash pipx
+pipx install pyinfra
+```
+</CodeGroup>
+
+Verify the installation:
+
+```bash
+pyinfra --version
+```
+
+<Check>If you see a version number, you're ready to go!</Check>
+
+## Your First Command
+
+Let's run a simple command on a target. We'll use a Docker container for this example:
+
+```bash
+pyinfra @docker/ubuntu exec -- echo "Hello from pyinfra!"
+```
+
+This command:
+- Targets a Docker container (`@docker/ubuntu`)
+- Executes a shell command (`exec`)
+- Runs `echo "Hello from pyinfra!"`
+
+<Accordion title="Understanding the syntax">
+- `@docker/ubuntu`: The target connector and image
+- `exec`: The pyinfra command to execute
+- `--`: Separates pyinfra arguments from the shell command
+- `echo "Hello from pyinfra!"`: The actual command to run
 </Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+### Try Different Targets
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<CodeGroup>
+```bash SSH Server
+# Replace with your server hostname
+pyinfra my-server.net exec -- echo "Hello from pyinfra!"
+```
 
-### Step 3: Go live
+```bash Local Machine
+pyinfra @local exec -- echo "Hello from pyinfra!"
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```bash Multiple Hosts
+pyinfra server1.net,server2.net exec -- echo "Hello from pyinfra!"
+```
+</CodeGroup>
 
-## Next steps
+## Using Operations
 
-Now that you have your docs running, explore these key features:
+Commands are great for ad-hoc tasks, but pyinfra really shines with **operations**. Operations are declarative and idempotent.
 
-<CardGroup cols={2}>
+Let's install a package using the `apt.packages` operation:
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+```bash
+pyinfra @docker/ubuntu apt.packages iftop update=true _sudo=true
+```
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This operation:
+- Installs the `iftop` package
+- Updates the apt cache first (`update=true`)
+- Runs with sudo privileges (`_sudo=true`)
+- Only makes changes if `iftop` isn't already installed
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Run this command twice - notice the second time it says "no changes"? That's **idempotency** in action.
 </Note>
+
+## Creating Your First Deploy File
+
+For anything more complex than a single operation, you'll want to create a **deploy file**. This is a Python file that defines your infrastructure.
+
+<Steps>
+  <Step title="Create a deploy file">
+    Create a file called `deploy.py`:
+    
+    ```python deploy.py
+    from pyinfra.operations import apt, files, server
+    
+    # Update package lists and upgrade all packages
+    apt.update(
+        name="Update apt cache",
+        _sudo=True,
+    )
+    
+    # Install essential packages
+    apt.packages(
+        name="Install essential tools",
+        packages=["vim", "git", "htop", "nginx"],
+        update=True,
+        _sudo=True,
+    )
+    
+    # Create a simple nginx landing page
+    files.put(
+        name="Deploy custom index.html",
+        src="index.html",
+        dest="/var/www/html/index.html",
+        mode="644",
+        _sudo=True,
+    )
+    
+    # Ensure nginx is running
+    server.service(
+        name="Ensure nginx is running",
+        service="nginx",
+        running=True,
+        enabled=True,
+        _sudo=True,
+    )
+    ```
+  </Step>
+  
+  <Step title="Create the index.html file">
+    Create `index.html` in the same directory:
+    
+    ```html index.html
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>pyinfra deployed this!</title>
+    </head>
+    <body>
+        <h1>Hello from pyinfra!</h1>
+        <p>This page was deployed using pyinfra.</p>
+    </body>
+    </html>
+    ```
+  </Step>
+  
+  <Step title="Run the deploy">
+    Execute your deploy file:
+    
+    ```bash
+    pyinfra @docker/ubuntu deploy.py
+    ```
+    
+    You'll see output showing each operation and what changes were made:
+    
+    ```
+    --> Loading deploy file: deploy.py
+    --> Loaded operations: 4
+    
+    --> Executing operations...
+    [SUCCESS] Update apt cache
+    [SUCCESS] Install essential tools (4 packages added)
+    [SUCCESS] Deploy custom index.html (file uploaded)
+    [SUCCESS] Ensure nginx is running (service started)
+    
+    --> Results:
+        Operations: 4
+        Commands: 12
+        Errors: 0
+    ```
+  </Step>
+  
+  <Step title="Verify it worked">
+    Check that nginx is serving your page:
+    
+    ```bash
+    pyinfra @docker/ubuntu exec -- curl localhost
+    ```
+    
+    You should see your HTML page!
+  </Step>
+</Steps>
+
+## Creating an Inventory File
+
+Typing host names on the command line works for quick tasks, but for real deployments you'll want an **inventory file**.
+
+Create `inventory.py`:
+
+```python inventory.py
+# Define your hosts
+targets = [
+    "@docker/ubuntu",  # Docker container
+    "web1.example.com",  # Production web server
+    ("web2.example.com", {"ssh_port": 2222}),  # Server with custom SSH port
+]
+
+# Define groups for organizing hosts
+webservers = [
+    "web1.example.com",
+    "web2.example.com",
+]
+
+containers = [
+    "@docker/ubuntu",
+]
+```
+
+Now run your deploy against the inventory:
+
+```bash
+pyinfra inventory.py deploy.py
+```
+
+This will execute `deploy.py` on all hosts defined in `inventory.py`.
+
+<Tip>
+You can limit execution to specific hosts or groups using the `--limit` flag:
+
+```bash
+pyinfra inventory.py deploy.py --limit webservers
+```
+</Tip>
+
+## Dry Run Mode
+
+Before making changes to production servers, use **dry run mode** to see what would happen:
+
+```bash
+pyinfra inventory.py deploy.py --dry
+```
+
+This shows all the commands that would be executed without actually running them.
+
+<Warning>
+Always test with `--dry` before deploying to production!
+</Warning>
+
+## Debugging
+
+Need to see exactly what's happening? Use verbose output:
+
+```bash
+# Show operation details
+pyinfra inventory.py deploy.py -v
+
+# Show commands being executed
+pyinfra inventory.py deploy.py -vv
+
+# Show all output including stderr
+pyinfra inventory.py deploy.py -vvv
+```
+
+## Using Python Features
+
+Remember, deploy files are just Python! Use all the language features you know:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, server
+
+# Define a reusable function
+def install_web_stack(domain):
+    apt.packages(
+        name=f"Install packages for {domain}",
+        packages=["nginx", "certbot"],
+        _sudo=True,
+    )
+    
+    files.template(
+        name=f"Configure nginx for {domain}",
+        src="nginx.conf.j2",
+        dest=f"/etc/nginx/sites-available/{domain}",
+        domain=domain,  # Pass variables to template
+        _sudo=True,
+    )
+
+# Use conditionals
+if host.get_fact("Os") == "Ubuntu":
+    install_web_stack("example.com")
+
+# Loop over data
+for port in [80, 443, 8080]:
+    server.shell(
+        name=f"Open port {port}",
+        commands=f"ufw allow {port}",
+        _sudo=True,
+    )
+```
+
+## Understanding the Workflow
+
+Here's what happens when you run a deploy:
+
+<Steps>
+  <Step title="Load inventory">
+    pyinfra loads your inventory file and connects to all target hosts.
+  </Step>
+  
+  <Step title="Gather facts">
+    For each host, pyinfra gathers facts (OS, packages, files, etc.) to understand current state.
+  </Step>
+  
+  <Step title="Generate operations">
+    Your deploy file is executed, generating a list of operations to perform.
+  </Step>
+  
+  <Step title="Generate commands">
+    Each operation compares desired state with current state and generates the minimal shell commands needed.
+  </Step>
+  
+  <Step title="Execute in parallel">
+    Commands are executed on all hosts in parallel for maximum speed.
+  </Step>
+  
+  <Step title="Report results">
+    pyinfra shows you what changed (or didn't) on each host.
+  </Step>
+</Steps>
+
+## Common Operations
+
+Here are some operations you'll use frequently:
+
+<AccordionGroup>
+  <Accordion title="Package Management">
+    ```python
+    from pyinfra.operations import apt
+    
+    # Install packages
+    apt.packages(
+        packages=["nginx", "postgresql", "redis"],
+        update=True,
+        _sudo=True,
+    )
+    
+    # Remove packages
+    apt.packages(
+        packages=["apache2"],
+        present=False,
+        _sudo=True,
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="File Management">
+    ```python
+    from pyinfra.operations import files
+    
+    # Upload a file
+    files.put(
+        src="local-file.txt",
+        dest="/remote/path/file.txt",
+        mode="644",
+    )
+    
+    # Create directory
+    files.directory(
+        path="/opt/myapp",
+        user="ubuntu",
+        group="ubuntu",
+        mode="755",
+        _sudo=True,
+    )
+    
+    # Use Jinja2 templates
+    files.template(
+        src="config.j2",
+        dest="/etc/myapp/config.yaml",
+        setting_value="production",
+        _sudo=True,
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Service Management">
+    ```python
+    from pyinfra.operations import server
+    
+    # Manage systemd services
+    server.service(
+        service="nginx",
+        running=True,
+        enabled=True,
+        restarted=True,  # Restart if running
+        _sudo=True,
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Running Commands">
+    ```python
+    from pyinfra.operations import server
+    
+    # Execute shell commands
+    server.shell(
+        name="Run custom script",
+        commands=[
+            "cd /opt/myapp",
+            "./setup.sh",
+        ],
+        _sudo=True,
+    )
+    
+    # Run a script
+    server.script(
+        src="scripts/deploy.sh",
+        _sudo=True,
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+You've learned the basics of pyinfra! Here's where to go next:
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Deep dive into how pyinfra works
+  </Card>
+  
+  <Card title="Operations Reference" icon="list" href="/operations/overview">
+    Explore all 40+ operation modules
+  </Card>
+  
+  <Card title="Inventory & Data" icon="server" href="/guides/inventory-and-data">
+    Learn advanced inventory management
+  </Card>
+  
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Master the pyinfra command line
+  </Card>
+</CardGroup>
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/pyinfra-dev/pyinfra/discussions">
+    Ask questions and share knowledge
+  </Card>
+  
+  <Card title="Matrix Chat" icon="comments" href="https://matrix.to/#/#pyinfra:matrix.org">
+    Real-time community support
+  </Card>
+  
+  <Card title="Examples Repository" icon="code" href="https://github.com/pyinfra-dev/pyinfra-examples">
+    See real-world examples
+  </Card>
+  
+  <Card title="Issue Tracker" icon="bug" href="https://github.com/pyinfra-dev/pyinfra/issues">
+    Report bugs and request features
+  </Card>
+</CardGroup>

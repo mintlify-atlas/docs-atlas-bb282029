@@ -1,0 +1,210 @@
+---
+title: git
+description: Manage git repositories and configuration
+---
+
+Manage git repositories and configuration.
+
+## Functions
+
+### `git.config`
+
+Manage git config at repository, user or system level.
+
+```python
+git.config(
+    key,
+    value,
+    multi_value=False,
+    repo=None,
+    system=False,
+)
+```
+
+<ParamField name="key" type="str" required>
+  The key of the config to ensure
+</ParamField>
+
+<ParamField name="value" type="str" required>
+  The value this key should have
+</ParamField>
+
+<ParamField name="multi_value" type="bool" default="False">
+  Add the value rather than set it for settings that can have multiple values
+</ParamField>
+
+<ParamField name="repo" type="str" default="None">
+  Specify the git repo path to edit local config (defaults to global)
+</ParamField>
+
+<ParamField name="system" type="bool" default="False">
+  Whether, when `repo` is unspecified, to work at system level (or default to global)
+</ParamField>
+
+### `git.repo`
+
+Clone/pull git repositories.
+
+```python
+git.repo(
+    src,
+    dest,
+    branch=None,
+    pull=True,
+    rebase=False,
+    user=None,
+    group=None,
+    ssh_keyscan=False,
+    update_submodules=False,
+    recursive_submodules=False,
+)
+```
+
+<ParamField name="src" type="str" required>
+  The git source URL
+</ParamField>
+
+<ParamField name="dest" type="str" required>
+  Directory to clone to
+</ParamField>
+
+<ParamField name="branch" type="str" default="None">
+  Branch to pull/checkout
+</ParamField>
+
+<ParamField name="pull" type="bool" default="True">
+  Pull any changes for the branch
+</ParamField>
+
+<ParamField name="rebase" type="bool" default="False">
+  When pulling, use `--rebase`
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  Chown files to this user after
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  Chown files to this group after
+</ParamField>
+
+<ParamField name="ssh_keyscan" type="bool" default="False">
+  Keyscan the remote host if not in known_hosts before clone/pull
+</ParamField>
+
+<ParamField name="update_submodules" type="bool" default="False">
+  Update any git submodules
+</ParamField>
+
+<ParamField name="recursive_submodules" type="bool" default="False">
+  Update git submodules recursively
+</ParamField>
+
+### `git.worktree`
+
+Manage git worktrees.
+
+```python
+git.worktree(
+    worktree,
+    repo=None,
+    detached=False,
+    new_branch=None,
+    commitish=None,
+    pull=True,
+    rebase=False,
+    from_remote_branch=None,
+    present=True,
+    force=False,
+    user=None,
+    group=None,
+)
+```
+
+<ParamField name="worktree" type="str" required>
+  Git working tree directory
+</ParamField>
+
+<ParamField name="repo" type="str" default="None">
+  Git main repository directory
+</ParamField>
+
+<ParamField name="detached" type="bool" default="False">
+  Create a working tree with a detached HEAD
+</ParamField>
+
+<ParamField name="new_branch" type="str" default="None">
+  Local branch name created at the same time than the worktree
+</ParamField>
+
+<ParamField name="commitish" type="str" default="None">
+  From which git commit, branch, ... the worktree is created
+</ParamField>
+
+<ParamField name="pull" type="bool" default="True">
+  Pull any changes from a remote branch if set
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the working tree should exist
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Whether to use `--force` when adding/removing worktrees
+</ParamField>
+
+### `git.bare_repo`
+
+Create bare git repositories.
+
+```python
+git.bare_repo(
+    path,
+    user=None,
+    group=None,
+    present=True,
+)
+```
+
+<ParamField name="path" type="str" required>
+  Path to the folder
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the bare repository should exist
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  Chown files to this user after
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  Chown files to this group after
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import git
+
+# Clone a repository
+git.repo(
+    name="Clone repo",
+    src="https://github.com/Fizzadar/pyinfra.git",
+    dest="/usr/local/src/pyinfra",
+)
+
+# Set git config
+git.config(
+    name="Always prune specified repo",
+    key="fetch.prune",
+    value="true",
+    repo="/usr/local/src/pyinfra",
+)
+
+# Create a bare repository
+git.bare_repo(
+    name="Create bare repo",
+    path="/home/git/test.git",
+)
+```

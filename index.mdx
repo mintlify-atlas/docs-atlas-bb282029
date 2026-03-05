@@ -1,97 +1,236 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "pyinfra Documentation"
+description: "Infrastructure automation framework that turns Python code into shell commands"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white py-20">
+  <div className="absolute inset-0 dark:bg-gradient-to-br dark:from-[#0aaf51]/10 dark:via-transparent dark:to-[#23342b]/20 bg-gradient-to-br from-[#ade6c5]/20 via-transparent to-[#0aaf51]/10"></div>
+  <div className="relative max-w-6xl mx-auto px-6">
+    <div className="grid lg:grid-cols-12 gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl sm:text-6xl font-bold dark:text-white text-gray-900 mb-6">
+          Infrastructure automation with Python
+        </h1>
+        <p className="text-xl dark:text-gray-300 text-gray-600 mb-8 max-w-2xl">
+          pyinfra turns Python code into shell commands and runs them on your servers. Execute ad-hoc commands and write declarative operations. Target SSH servers, local machine, and Docker containers.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a
+            href="/quickstart"
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#0aaf51] text-white font-semibold hover:bg-[#099644] transition-colors"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a
+            href="/operations/overview"
+            className="inline-flex items-center px-6 py-3 rounded-lg border dark:border-white/30 dark:bg-white/10 dark:text-white border-gray-300 bg-gray-50 text-gray-900 font-semibold dark:hover:bg-white/20 hover:bg-gray-100 transition-colors"
+          >
+            Explore Operations
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-6 dark:border dark:border-[#27272a] border border-gray-200">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          </div>
+          <pre className="text-sm dark:text-gray-300 text-gray-700 overflow-x-auto">
+{`from pyinfra.operations import apt
 
-Get your documentation site up and running in minutes.
+apt.packages(
+    name="Install web server",
+    packages=["nginx", "certbot"],
+    update=True,
+    _sudo=True,
+)`}
+          </pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold dark:text-white text-gray-900 mb-4">Quick Start</h2>
+  <p className="text-lg dark:text-gray-400 text-gray-600 mb-8">Get up and running with pyinfra in minutes</p>
+  
+  <Steps>
+    <Step title="Install pyinfra">
+      Install pyinfra using uv, pip, or your preferred package manager.
+      
+      <CodeGroup>
+      ```bash uv
+      uv tool install pyinfra
+      ```
+      
+      ```bash pip
+      pip install pyinfra
+      ```
+      
+      ```bash pipx
+      pipx install pyinfra
+      ```
+      </CodeGroup>
+    </Step>
+    
+    <Step title="Run your first command">
+      Execute a command on a remote server via SSH or on your local machine.
+      
+      ```bash
+      pyinfra my-server.net exec -- echo "Hello from pyinfra"
+      ```
+      
+      <Note>
+        You can also target Docker containers (`@docker/ubuntu`), the local machine (`@local`), and other connectors.
+      </Note>
+    </Step>
+    
+    <Step title="Use operations">
+      Define infrastructure state using declarative operations.
+      
+      ```bash
+      pyinfra @docker/ubuntu apt.packages iftop update=true _sudo=true
+      ```
+      
+      This ensures the `iftop` package is installed, running updates if needed.
+    </Step>
+    
+    <Step title="Create a deploy file">
+      Save your infrastructure code as a Python file for repeatable deployments.
+      
+      ```python deploy.py
+      from pyinfra.operations import apt, systemd
+      
+      apt.packages(
+          name="Install nginx",
+          packages=["nginx"],
+          update=True,
+          _sudo=True,
+      )
+      
+      systemd.service(
+          name="Ensure nginx is running",
+          service="nginx",
+          running=True,
+          enabled=True,
+          _sudo=True,
+      )
+      ```
+      
+      Run with: `pyinfra inventory.py deploy.py`
+    </Step>
+  </Steps>
+</div>
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold dark:text-white text-gray-900 mb-4">Explore by Topic</h2>
+  <p className="text-lg dark:text-gray-400 text-gray-600 mb-8">Dive deeper into pyinfra's capabilities</p>
+  
+  <CardGroup cols={2}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Core Concepts"
+      icon="book-open"
+      href="/concepts/architecture"
+    >
+      Learn about operations, facts, inventory, state, and connectors
+    </Card>
+    <Card
+      title="Operations Reference"
+      icon="gears"
+      href="/operations/overview"
+    >
+      Explore 40+ operations for package managers, services, files, and databases
+    </Card>
+    <Card
+      title="CLI Reference"
+      icon="terminal"
+      href="/cli/overview"
+    >
+      Master the pyinfra command-line interface and its options
+    </Card>
+    <Card
+      title="API Reference"
+      icon="code"
+      href="/api/overview"
+    >
+      Deep dive into the Python API for advanced use cases
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold dark:text-white text-gray-900 mb-4">Key Features</h2>
+  <p className="text-lg dark:text-gray-400 text-gray-600 mb-8">Why developers choose pyinfra for infrastructure automation</p>
+  
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="dark:bg-[#1a1d27] bg-gray-50 p-6 rounded-xl dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[#0aaf51]/20 flex items-center justify-center">
+          <svg className="w-6 h-6 text-[#0aaf51]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold dark:text-white text-gray-900">Super Fast Execution</h3>
+      </div>
+      <p className="dark:text-gray-400 text-gray-600">Execute over thousands of hosts with predictable performance and parallel execution.</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 p-6 rounded-xl dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[#0aaf51]/20 flex items-center justify-center">
+          <svg className="w-6 h-6 text-[#0aaf51]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold dark:text-white text-gray-900">Idempotent Operations</h3>
+      </div>
+      <p className="dark:text-gray-400 text-gray-600">Safe deployments with dry runs and diffs before making any changes to your infrastructure.</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 p-6 rounded-xl dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[#0aaf51]/20 flex items-center justify-center">
+          <svg className="w-6 h-6 text-[#0aaf51]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold dark:text-white text-gray-900">Python-Based</h3>
+      </div>
+      <p className="dark:text-gray-400 text-gray-600">Write infrastructure as Python code, not YAML. Use the entire Python ecosystem.</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 p-6 rounded-xl dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[#0aaf51]/20 flex items-center justify-center">
+          <svg className="w-6 h-6 text-[#0aaf51]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold dark:text-white text-gray-900">Multiple Connectors</h3>
+      </div>
+      <p className="dark:text-gray-400 text-gray-600">Connect to SSH servers, Docker containers, local machine, and integrate with Terraform and Vagrant.</p>
+    </div>
+  </div>
+</div>
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-8 dark:border dark:border-[#27272a] border border-gray-200">
+    <h2 className="text-2xl font-bold dark:text-white text-gray-900 mb-3">Ready to automate your infrastructure?</h2>
+    <p className="dark:text-gray-400 text-gray-600 mb-6">Get started with pyinfra and deploy with confidence using Python.</p>
+    <a
+      href="/quickstart"
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-[#0aaf51] text-white font-semibold hover:bg-[#099644] transition-colors"
+    >
+      Start Building
+      <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  </div>
+</div>

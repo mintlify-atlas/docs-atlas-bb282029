@@ -1,0 +1,245 @@
+---
+title: "Introduction to pyinfra"
+description: "Fast, scalable infrastructure automation with Python"
+---
+
+## What is pyinfra?
+
+pyinfra turns Python code into shell commands and runs them on your servers. Execute ad-hoc commands and write declarative operations. Target SSH servers, local machine and Docker containers. Fast and scales from one server to thousands.
+
+<Note>
+Think **Ansible** but Python instead of YAML, and a lot faster.
+</Note>
+
+## Why pyinfra?
+
+pyinfra is designed from the ground up for speed, flexibility, and developer experience. Here's what makes it special:
+
+<CardGroup cols={2}>
+  <Card title="Super Fast Execution" icon="rocket">
+    Parallel execution over thousands of hosts with predictable performance. Uses gevent for efficient concurrent operations.
+  </Card>
+  
+  <Card title="Instant Debugging" icon="bell">
+    Realtime stdin/stdout/stderr output with `-vvv` flag. See exactly what's happening on your servers as it happens.
+  </Card>
+  
+  <Card title="Idempotent Operations" icon="arrows-rotate">
+    Operations only make changes when needed. Enable diffs and dry runs before making changes to verify what will happen.
+  </Card>
+  
+  <Card title="Extendable with Python" icon="box">
+    Access the entire Python package ecosystem. Use any Python library in your deployments - Jinja2, Pydantic, and more.
+  </Card>
+  
+  <Card title="Agentless Execution" icon="laptop">
+    No agents required. Works against anything with shell access via SSH, Docker, local execution, and more.
+  </Card>
+  
+  <Card title="Multiple Connectors" icon="plug">
+    Integrated connectors for Docker, Podman, Terraform, Vagrant, and more. Deploy to any infrastructure.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Python-Native Configuration
+
+Write your infrastructure as Python code. Use loops, conditionals, functions, and classes - all the power of Python:
+
+```python
+from pyinfra.operations import apt, files, server
+
+# Install packages
+apt.packages(
+    name="Install essential tools",
+    packages=["vim", "git", "htop"],
+    update=True,
+    _sudo=True,
+)
+
+# Configure files
+files.template(
+    name="Deploy nginx config",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# Manage services
+server.service(
+    name="Ensure nginx is running",
+    service="nginx",
+    running=True,
+    enabled=True,
+    _sudo=True,
+)
+```
+
+### Operations for Everything
+
+pyinfra includes 40+ operation modules covering:
+
+- **Package managers**: apt, yum, dnf, apk, pacman, brew, choco, and more
+- **Service management**: systemd, sysvinit, upstart, launchd, openrc, runit
+- **Files & directories**: upload, download, template, permissions, ownership
+- **Language packages**: pip, npm, gem, cargo
+- **Databases**: MySQL, PostgreSQL
+- **Containers**: Docker, LXD
+- **Version control**: Git operations
+- **Security**: iptables, SELinux
+
+### Facts System
+
+Query server state before making changes. Facts are gathered automatically:
+
+```python
+from pyinfra import host
+from pyinfra.operations import server
+
+# Conditional operations based on OS
+if host.get_fact("Os") == "Ubuntu":
+    apt.packages(
+        name="Install ubuntu-specific tools",
+        packages=["ubuntu-advantage-tools"],
+    )
+```
+
+### Multiple Execution Targets
+
+Run operations across different infrastructure types:
+
+```bash
+# SSH to remote servers
+pyinfra my-server.net exec -- echo "hello"
+
+# Docker containers
+pyinfra @docker/ubuntu exec -- echo "hello"
+
+# Local machine
+pyinfra @local exec -- echo "hello"
+
+# Multiple hosts from inventory
+pyinfra inventory.py deploy.py
+```
+
+## How pyinfra Compares
+
+### vs. Ansible
+
+<AccordionGroup>
+  <Accordion title="Performance">
+    pyinfra is significantly faster than Ansible. It uses gevent for concurrent execution and has minimal overhead. Operations execute in parallel across all hosts by default.
+  </Accordion>
+  
+  <Accordion title="Language">
+    pyinfra uses Python instead of YAML. This means:
+    - Full programming language features (loops, functions, classes)
+    - Type checking and IDE autocomplete
+    - Access to the Python ecosystem
+    - Easier testing and debugging
+  </Accordion>
+  
+  <Accordion title="Learning Curve">
+    If you know Python, you already know pyinfra. No custom DSL to learn. The API is straightforward and Pythonic.
+  </Accordion>
+  
+  <Accordion title="Architecture">
+    Both are agentless, but pyinfra has a simpler execution model. No complex variable precedence or template rendering rules.
+  </Accordion>
+</AccordionGroup>
+
+### vs. Terraform
+
+<AccordionGroup>
+  <Accordion title="Purpose">
+    Terraform is for infrastructure provisioning (creating cloud resources). pyinfra is for configuration management (setting up and maintaining servers).
+  </Accordion>
+  
+  <Accordion title="Integration">
+    pyinfra can actually work with Terraform! Use the Terraform connector to automatically inventory resources and configure them.
+  </Accordion>
+</AccordionGroup>
+
+### vs. Chef/Puppet
+
+<AccordionGroup>
+  <Accordion title="Architecture">
+    Chef and Puppet require agents on target servers. pyinfra is agentless - just needs SSH access.
+  </Accordion>
+  
+  <Accordion title="Complexity">
+    Chef and Puppet have steep learning curves with custom DSLs. pyinfra uses pure Python.
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Server Configuration" icon="server">
+    Set up and maintain web servers, databases, and application servers. Deploy configurations, manage services, and ensure consistency.
+  </Card>
+  
+  <Card title="Application Deployment" icon="rocket">
+    Deploy applications, update code, restart services, and run migrations. Perfect for continuous deployment pipelines.
+  </Card>
+  
+  <Card title="Infrastructure Testing" icon="flask">
+    Test infrastructure changes with dry-run mode. Verify configurations before applying them to production.
+  </Card>
+  
+  <Card title="Ad-hoc Operations" icon="terminal">
+    Quick one-off tasks across multiple servers. No need to write full playbooks for simple operations.
+  </Card>
+  
+  <Card title="Container Orchestration" icon="docker">
+    Manage Docker containers, build images, and configure container hosts.
+  </Card>
+  
+  <Card title="Development Environments" icon="code">
+    Provision and configure local development environments with Vagrant integration.
+  </Card>
+</CardGroup>
+
+## Architecture
+
+pyinfra follows a simple execution model:
+
+1. **Inventory**: Define target hosts (SSH servers, Docker containers, local machine)
+2. **Operations**: Define desired state using Python operations
+3. **Facts**: Query current state from hosts
+4. **Commands**: Generate shell commands based on the diff
+5. **Execute**: Run commands in parallel across all hosts
+6. **Report**: Show results and any changes made
+
+<Note>
+pyinfra is **idempotent** by default. Operations check current state and only make changes when needed.
+</Note>
+
+## Production Ready
+
+pyinfra is production-stable software used by organizations worldwide:
+
+- **Battle-tested**: In production since 2015
+- **Well-maintained**: Active development and regular releases
+- **Python 3.10+**: Supports Python 3.10, 3.11, 3.12, and 3.13
+- **Comprehensive testing**: Extensive test suite with end-to-end tests
+- **Type hints**: Full type annotations for IDE support
+
+## Next Steps
+
+Ready to get started? Follow our quickstart guide to deploy your first infrastructure with pyinfra:
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Install pyinfra and run your first deployment in minutes
+</Card>
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Multiple installation methods and system requirements
+  </Card>
+  
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Understand how pyinfra works under the hood
+  </Card>
+</CardGroup>

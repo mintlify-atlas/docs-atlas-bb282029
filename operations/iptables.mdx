@@ -1,0 +1,172 @@
+---
+title: iptables
+description: Manage iptables firewall rules
+---
+
+The iptables modules handles iptables rules.
+
+## Functions
+
+### `iptables.chain`
+
+Add/remove/update iptables chains.
+
+```python
+iptables.chain(
+    chain,
+    present=True,
+    table="filter",
+    policy=None,
+    version=4,
+)
+```
+
+<ParamField name="chain" type="str" required>
+  The name of the chain
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the chain should exist
+</ParamField>
+
+<ParamField name="table" type="str" default="filter">
+  The iptables table this chain should belong to
+</ParamField>
+
+<ParamField name="policy" type="str" default="None">
+  The policy this table should have
+</ParamField>
+
+<ParamField name="version" type="int" default="4">
+  Whether to target iptables or ip6tables
+</ParamField>
+
+<Note>
+**Policy:** These can only be applied to system chains (FORWARD, INPUT, OUTPUT, etc).
+</Note>
+
+### `iptables.rule`
+
+Add/remove iptables rules.
+
+```python
+iptables.rule(
+    chain,
+    jump,
+    present=True,
+    table="filter",
+    append=True,
+    version=4,
+    protocol=None,
+    source=None,
+    destination=None,
+    in_interface=None,
+    out_interface=None,
+    to_destination=None,
+    to_source=None,
+    to_ports=None,
+    log_prefix=None,
+    destination_port=None,
+    source_port=None,
+    extras="",
+)
+```
+
+<ParamField name="chain" type="str" required>
+  The chain this rule should live in
+</ParamField>
+
+<ParamField name="jump" type="str" required>
+  The target of the rule
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the rule should exist
+</ParamField>
+
+<ParamField name="table" type="str" default="filter">
+  The iptables table this rule should belong to
+</ParamField>
+
+<ParamField name="append" type="bool" default="True">
+  Whether to append or insert the rule (if not present)
+</ParamField>
+
+<ParamField name="version" type="int" default="4">
+  Whether to target iptables or ip6tables
+</ParamField>
+
+<ParamField name="protocol" type="str" default="None">
+  Filter by protocol (tcp or udp)
+</ParamField>
+
+<ParamField name="source" type="str" default="None">
+  Filter by source IPs
+</ParamField>
+
+<ParamField name="destination" type="str" default="None">
+  Filter by destination IPs
+</ParamField>
+
+<ParamField name="in_interface" type="str" default="None">
+  Filter by incoming interface
+</ParamField>
+
+<ParamField name="out_interface" type="str" default="None">
+  Filter by outgoing interface
+</ParamField>
+
+<ParamField name="to_destination" type="str" default="None">
+  Where to route to when jump=DNAT
+</ParamField>
+
+<ParamField name="to_source" type="str" default="None">
+  Where to route to when jump=SNAT
+</ParamField>
+
+<ParamField name="to_ports" type="int | str" default="None">
+  Where to route to when jump=REDIRECT
+</ParamField>
+
+<ParamField name="log_prefix" type="str" default="None">
+  Prefix for the log of this rule when jump=LOG
+</ParamField>
+
+<ParamField name="destination_port" type="int" default="None">
+  Destination port (requires protocol)
+</ParamField>
+
+<ParamField name="source_port" type="int" default="None">
+  Source port (requires protocol)
+</ParamField>
+
+<ParamField name="extras" type="str" default="">
+  A place to define iptables extension arguments (eg --limit, --physdev)
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import iptables
+
+# Block SSH traffic
+iptables.rule(
+    name="Block SSH traffic",
+    chain="INPUT",
+    jump="DROP",
+    destination_port=22,
+    protocol="tcp",
+)
+
+# NAT traffic
+iptables.rule(
+    name="NAT traffic on from 8.8.8.8:53 to 8.8.4.4:8080",
+    chain="PREROUTING",
+    jump="DNAT",
+    table="nat",
+    source="8.8.8.8",
+    destination_port=53,
+    protocol="tcp",
+    to_destination="8.8.4.4:8080",
+)
+```

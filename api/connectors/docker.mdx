@@ -1,0 +1,384 @@
+---
+title: Docker Connector
+description: Execute operations in Docker containers
+---
+
+The Docker connector allows pyinfra to target Docker containers as inventory. You can create new containers from images, execute operations, and save the results as new images.
+
+## Overview
+
+The Docker connector operates in two modes:
+
+1. **Image Mode** - Creates a new container from an image, executes operations, saves to a new image, and removes the container
+2. **Container Mode** - Executes operations against an existing running container
+
+```shell
+# Create container from image
+pyinfra @docker/ubuntu:22.04 ...
+
+# Execute against running container
+pyinfra @docker/container_id ...
+
+# Multiple containers in parallel
+pyinfra @docker/ubuntu:22.04,@docker/alpine:3.18 ...
+```
+
+<Note>
+The Docker connector is great for testing pyinfra operations locally without needing remote SSH hosts.
+</Note>
+
+## Connector Data
+
+<ParamField path="docker_identifier" type="str" required>
+  Docker image name or existing container ID.
+</ParamField>
+
+<ParamField path="docker_platform" type="str" optional>
+  Platform to use for Docker image (e.g., `linux/amd64`, `linux/arm64`).
+</ParamField>
+
+<ParamField path="docker_architecture" type="str" optional>
+  Architecture to use for Docker image (e.g., `amd64`, `arm64`).
+</ParamField>
+
+## Basic Usage
+
+### From Docker Image
+
+```shell
+# Install nginx in Ubuntu container
+pyinfra @docker/ubuntu:22.04 apt.packages nginx update=true _sudo=true
+
+# Multiple operations
+pyinfra @docker/alpine:3.18 deploy.py
+```
+
+### From Existing Container
+
+```shell
+# Get container ID
+docker ps
+# CONTAINER ID   IMAGE     ...
+# 2beb8c15a1b1   ubuntu    ...
+
+# Execute against running container
+pyinfra @docker/2beb8c15a1b1 server.shell "echo hello"
+```
+
+## Inventory Examples
+
+### Single Container
+
+```python
+# inventory.py
+hosts = ["@docker/ubuntu:22.04"]
+```
+
+### Multiple Containers
+
+```python
+# inventory.py
+hosts = [
+    "@docker/ubuntu:22.04",
+    "@docker/debian:12",
+    "@docker/alpine:3.18",
+]
+```
+
+### Containers with Data
+
+```python
+# inventory.py
+hosts = [
+    ("@docker/ubuntu:22.04", {
+        "docker_identifier": "ubuntu:22.04",
+        "app_name": "web",
+    }),
+    ("@docker/postgres:15", {
+        "docker_identifier": "postgres:15",
+        "app_name": "db",
+    }),
+]
+```
+
+### Cross-Platform Containers
+
+```python
+# inventory.py
+hosts = [
+    ("@docker/ubuntu:22.04", {
+        "docker_identifier": "ubuntu:22.04",
+        "docker_platform": "linux/amd64",
+    }),
+    ("@docker/ubuntu:22.04", {
+        "docker_identifier": "ubuntu:22.04",
+        "docker_platform": "linux/arm64",
+    }),
+]
+```
+
+## Creating Docker Images
+
+When using image mode, pyinfra automatically:
+1. Creates a new container from the image
+2. Executes operations
+3. Commits changes to a new image
+4. Removes the temporary container
+
+```shell
+# Operations are saved to new image
+pyinfra @docker/ubuntu:22.04 \
+    apt.packages nginx update=true _sudo=true \
+    --save-image my-nginx:latest
+```
+
+## Image Mode vs Container Mode
+
+### Image Mode
+
+Used when specifying an image name:
+
+```python
+# inventory.py
+hosts = ["@docker/ubuntu:22.04"]
+```
+
+Pyinfra will:
+- Create a new container: `docker run -d ubuntu:22.04 tail -f /dev/null`
+- Execute operations
+- Optionally save to new image
+- Remove container
+
+### Container Mode
+
+Used when specifying a container ID:
+
+```python
+# inventory.py
+hosts = ["@docker/abc123def456"]  # Container ID
+```
+
+Pyinfra will:
+- Use existing container (starts it if stopped)
+- Execute operations
+- Leave container running
+
+## Using Podman
+
+The Docker connector works with Podman too:
+
+```python
+# Use podman instead of docker
+from pyinfra.connectors.docker import DockerConnector
+
+DockerConnector.docker_cmd = "podman"
+
+hosts = ["@docker/ubuntu:22.04"]
+```
+
+## Complete Example
+
+Here's a complete example creating a custom web server image:
+
+```python
+# inventory.py
+hosts = [
+    ("@docker/ubuntu:22.04", {
+        "docker_identifier": "ubuntu:22.04",
+    }),
+]
+```
+
+```python
+# deploy.py
+from pyinfra.operations import apt, files, systemd
+
+# Update and install packages
+apt.update(
+    name="Update apt cache",
+    _sudo=True,
+)
+
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# Configure nginx
+files.put(
+    name="Upload nginx config",
+    src="configs/nginx.conf",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# Create web content
+files.file(
+    name="Create index.html",
+    path="/var/www/html/index.html",
+    content="<h1>Hello from pyinfra!</h1>",
+    _sudo=True,
+)
+```
+
+```shell
+# Run and save to new image
+pyinfra inventory.py deploy.py --save-image my-webserver:v1
+```
+
+## Testing with Docker
+
+The Docker connector is ideal for testing deployments locally:
+
+```python
+# test_deploy.py
+from pyinfra import Config, Inventory, State
+from pyinfra.api import add_op
+from pyinfra.operations import apt, server
+
+# Test inventory
+inventory = Inventory(
+    (["@docker/ubuntu:22.04"], {})
+)
+
+config = Config()
+state = State(inventory, config)
+state.init(inventory, config)
+
+# Connect
+for host in inventory:
+    host.connect()
+
+# Test operations
+add_op(state, apt.update)
+add_op(state, apt.packages, packages=["curl"])
+add_op(state, server.shell, commands=["curl --version"])
+
+# Execute
+from pyinfra.api.operations import run_ops
+run_ops(state)
+
+print("Test passed!")
+```
+
+## Multiple Distributions
+
+Test operations across multiple Linux distributions:
+
+```python
+# inventory.py
+hosts = [
+    # Debian-based
+    "@docker/ubuntu:22.04",
+    "@docker/ubuntu:20.04",
+    "@docker/debian:12",
+    "@docker/debian:11",
+    
+    # Red Hat-based
+    "@docker/fedora:39",
+    "@docker/centos:stream9",
+    
+    # Alpine
+    "@docker/alpine:3.18",
+]
+```
+
+```python
+# deploy.py
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution
+from pyinfra.operations import apt, apk, yum
+
+distro = host.get_fact(LinuxDistribution)
+
+if distro["name"] in ["Ubuntu", "Debian"]:
+    apt.packages(
+        name="Install curl",
+        packages=["curl"],
+        _sudo=True,
+    )
+elif distro["name"] == "Alpine":
+    apk.packages(
+        name="Install curl",
+        packages=["curl"],
+    )
+else:
+    yum.packages(
+        name="Install curl",
+        packages=["curl"],
+        _sudo=True,
+    )
+```
+
+## Limitations
+
+<Warning>
+The Docker connector has some limitations:
+
+- No systemd support in containers by default
+- Some privileged operations may fail
+- Container must have a shell available
+- File permissions may differ from regular hosts
+</Warning>
+
+## Troubleshooting
+
+### Container Not Found
+
+```shell
+# Pull image first
+docker pull ubuntu:22.04
+
+# Then run pyinfra
+pyinfra @docker/ubuntu:22.04 ...
+```
+
+### Permission Denied
+
+Ensure Docker daemon is accessible:
+
+```shell
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Or use sudo
+sudo pyinfra @docker/ubuntu:22.04 ...
+```
+
+### Platform Issues
+
+Specify platform explicitly:
+
+```python
+hosts = [
+    ("@docker/ubuntu:22.04", {
+        "docker_platform": "linux/amd64",
+    }),
+]
+```
+
+## Differences from DockerSSH
+
+- **docker connector** - Executes commands in local Docker containers
+- **dockerssh connector** - SSHs into Docker containers running on remote hosts
+
+For remote Docker containers, use the [dockerssh connector](/api/connectors/dockerssh).
+
+## Source Reference
+
+Location: `src/pyinfra/connectors/docker.py:40`
+
+### Key Properties
+
+- `docker_cmd` - Command to use (default: "docker", can be "podman")
+- `handles_execution` - This connector handles command execution
+- `container_id` - ID of running container
+
+### Key Methods
+
+- `connect()` - Create/connect to container
+- `disconnect()` - Stop/cleanup container  
+- `run_shell_command()` - Execute command in container
+- `put_file()` - Copy file into container
+- `get_file()` - Copy file from container

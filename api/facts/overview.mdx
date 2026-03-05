@@ -1,0 +1,405 @@
+---
+title: Facts Overview
+description: Gather information about target hosts using facts
+---
+
+Facts enable pyinfra to collect remote server state, which is used to diff against the desired state and determine which operations need to run.
+
+## What are Facts?
+
+Facts are Python classes that gather information about a host by executing commands and processing the output. They provide a consistent interface for reading system state.
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Hostname, LinuxDistribution
+from pyinfra.facts.files import File
+
+# Get simple fact
+hostname = host.get_fact(Hostname)
+print(f"Hostname: {hostname}")
+
+# Get fact with arguments
+file_info = host.get_fact(File, path="/etc/hosts")
+print(f"Size: {file_info['size']} bytes")
+
+# Get complex fact
+distro = host.get_fact(LinuxDistribution)
+print(f"OS: {distro['name']} {distro['version']}")
+```
+
+## Fact Categories
+
+Pyinfra includes facts organized by category:
+
+### System Facts
+- **[Server](/api/facts/server)** - System information (hostname, OS, architecture, users, groups)
+- **Hardware** - CPU, memory, disk information
+
+### File System Facts
+- **[Files](/api/facts/files)** - File and directory information
+- **File** - Single file metadata
+- **Directory** - Directory contents
+- **FindInFile** - Search within files
+
+### Package Manager Facts
+- **[Packages](/api/facts/packages)** - Installed packages across package managers
+- **Apt** - Debian/Ubuntu packages
+- **Yum/Dnf** - Red Hat/CentOS packages
+- **Apk** - Alpine packages
+- **Brew** - macOS packages
+- **Pip** - Python packages
+- **Npm** - Node.js packages
+- **Gem** - Ruby packages
+
+### Service Facts
+- **Systemd** - Systemd services
+- **Upstart** - Upstart services
+- **Launchd** - macOS services
+- **Sysvinit** - SysV init services
+
+### Application Facts
+- **Git** - Git repositories
+- **Docker** - Docker containers and images
+- **MySQL** - MySQL databases
+- **PostgreSQL** - PostgreSQL databases
+
+## Using Facts
+
+### In Operations
+
+Use facts to make operations conditional:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution
+from pyinfra.operations import apt, yum
+
+# Get distribution info
+distro = host.get_fact(LinuxDistribution)
+
+# Conditional operations based on OS
+if distro["name"] in ["Ubuntu", "Debian"]:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+    )
+elif distro["name"] in ["CentOS", "RedHat"]:
+    yum.packages(
+        name="Install nginx",
+        packages=["nginx"],
+    )
+```
+
+### Check File Exists
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import File
+from pyinfra.operations import files
+
+config_file = host.get_fact(File, path="/etc/app/config.ini")
+
+if not config_file:
+    files.put(
+        name="Upload config",
+        src="config.ini",
+        dest="/etc/app/config.ini",
+    )
+else:
+    host.noop("Config already exists")
+```
+
+### Check Package Installed
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Which
+from pyinfra.operations import apt
+
+nginx_path = host.get_fact(Which, command="nginx")
+
+if not nginx_path:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+    )
+```
+
+## Fact API
+
+### FactBase Class
+
+All facts inherit from `FactBase`:
+
+```python
+from pyinfra.api import FactBase
+
+class MyFact(FactBase):
+    def command(self, arg1, arg2):
+        """Return the command to execute."""
+        return f"my-command {arg1} {arg2}"
+    
+    def process(self, output: list[str]):
+        """Process command output into structured data."""
+        # Parse output and return data
+        return {"result": output[0]}
+```
+
+### Creating Custom Facts
+
+Create custom facts for your specific needs:
+
+```python
+# facts/custom.py
+from pyinfra.api import FactBase
+
+class AppVersion(FactBase):
+    """Get the installed version of our app."""
+    
+    def command(self):
+        return "/opt/myapp/bin/myapp --version"
+    
+    def process(self, output):
+        # Output: "MyApp version 1.2.3"
+        if output and output[0].startswith("MyApp version"):
+            return output[0].split(" ")[-1]
+        return None
+
+class AppConfig(FactBase):
+    """Read app configuration value."""
+    
+    def command(self, key):
+        return f"grep '^{key}=' /etc/myapp/config.ini | cut -d= -f2"
+    
+    def process(self, output):
+        return output[0] if output else None
+```
+
+Usage:
+
+```python
+from facts.custom import AppVersion, AppConfig
+from pyinfra import host
+
+# Get app version
+version = host.get_fact(AppVersion)
+print(f"App version: {version}")
+
+# Get config value
+port = host.get_fact(AppConfig, key="port")
+print(f"App port: {port}")
+```
+
+## Fact Caching
+
+Facts are cached per host to avoid redundant execution:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Hostname
+
+# First call executes command
+hostname1 = host.get_fact(Hostname)
+
+# Second call returns cached value
+hostname2 = host.get_fact(Hostname)
+
+assert hostname1 == hostname2
+```
+
+Facts with arguments are cached separately:
+
+```python
+from pyinfra.facts.files import File
+
+# Each path is cached separately
+file1 = host.get_fact(File, path="/etc/hosts")
+file2 = host.get_fact(File, path="/etc/passwd")
+```
+
+## Fact Execution
+
+Facts can use global arguments:
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import File
+
+# Execute fact with sudo
+file_info = host.get_fact(
+    File,
+    path="/root/.ssh/authorized_keys",
+    _sudo=True,
+)
+```
+
+## CLI Usage
+
+Query facts from the command line:
+
+```shell
+# Get fact from all hosts
+pyinfra inventory.py --facts server.Hostname
+
+# Get fact with arguments
+pyinfra inventory.py --facts files.File path=/etc/hosts
+
+# Multiple facts
+pyinfra inventory.py --facts server.Hostname server.Arch
+
+# JSON output
+pyinfra inventory.py --facts server.LinuxDistribution --json
+```
+
+## Best Practices
+
+### 1. Cache Facts in Variables
+
+```python
+# Good - fact called once
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution
+
+distro = host.get_fact(LinuxDistribution)
+if distro["name"] == "Ubuntu" and distro["major"] >= 20:
+    # Use distro
+    pass
+
+# Bad - fact called multiple times (though cached)
+if host.get_fact(LinuxDistribution)["name"] == "Ubuntu" and \
+   host.get_fact(LinuxDistribution)["major"] >= 20:
+    pass
+```
+
+### 2. Handle Missing Facts
+
+```python
+from pyinfra.facts.files import File
+
+file_info = host.get_fact(File, path="/opt/app/version.txt")
+
+if file_info:
+    print(f"File size: {file_info['size']}")
+else:
+    print("File does not exist")
+```
+
+### 3. Use Specific Facts
+
+```python
+# Good - specific fact
+from pyinfra.facts.server import Which
+nginx_path = host.get_fact(Which, command="nginx")
+
+# Bad - using shell command
+from pyinfra.facts.server import Command
+nginx_path = host.get_fact(Command, command="which nginx")
+```
+
+### 4. Reuse Facts
+
+Create reusable fact-based checks:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Which
+
+def package_installed(command):
+    """Check if a package is installed."""
+    return host.get_fact(Which, command=command) is not None
+
+if not package_installed("nginx"):
+    # Install nginx
+    pass
+
+if not package_installed("git"):
+    # Install git
+    pass
+```
+
+## Fact Types
+
+### Simple Facts
+
+Return a single value:
+
+```python
+from pyinfra.facts.server import Hostname
+
+# Returns: "web1.example.com"
+hostname = host.get_fact(Hostname)
+```
+
+### Dict Facts
+
+Return structured data:
+
+```python
+from pyinfra.facts.server import LinuxDistribution
+
+# Returns: {"name": "Ubuntu", "version": "22.04", "major": 22, ...}
+distro = host.get_fact(LinuxDistribution)
+```
+
+### List Facts
+
+Return multiple items:
+
+```python
+from pyinfra.facts.server import Groups
+
+# Returns: ["root", "sudo", "users", ...]
+groups = host.get_fact(Groups)
+```
+
+### Parameterized Facts
+
+Accept arguments:
+
+```python
+from pyinfra.facts.files import File
+from pyinfra.facts.server import User
+
+# File with path argument
+file_info = host.get_fact(File, path="/etc/hosts")
+
+# User with username argument
+user_info = host.get_fact(User, user="nginx")
+```
+
+## Error Handling
+
+Facts can fail if commands error:
+
+```python
+try:
+    file_info = host.get_fact(File, path="/etc/hosts", _sudo=True)
+except Exception as e:
+    print(f"Failed to get file info: {e}")
+```
+
+Some facts return `None` for missing items:
+
+```python
+from pyinfra.facts.files import File
+from pyinfra.facts.server import Which
+
+# Returns None if file doesn't exist
+file_info = host.get_fact(File, path="/nonexistent")
+
+# Returns None if command not found
+nginx_path = host.get_fact(Which, command="nonexistent")
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/facts.py`
+
+### Key Classes
+
+- `FactBase` - Base class for all facts (line 53)
+- `ShortFactBase` - Shorthand fact wrapper (line 98)
+
+### Key Functions
+
+- `get_fact()` - Get fact value (line in facts.py)

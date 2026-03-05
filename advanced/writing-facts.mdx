@@ -1,0 +1,519 @@
+---
+title: Writing Custom Facts
+description: Learn how to create custom facts to query remote system state
+---
+
+Facts are pyinfra's mechanism for collecting information about remote systems. They enable operations to make intelligent decisions by querying current state before generating commands. This guide will teach you how to write custom facts.
+
+## Understanding Facts
+
+Facts in pyinfra:
+- Execute commands on remote hosts and process the output
+- Cache results to avoid redundant command execution
+- Can accept parameters to customize behavior
+- Return structured data (strings, lists, dicts, or custom types)
+- Are defined as classes inheriting from `FactBase`
+
+## Basic Fact Structure
+
+Here's a simple fact definition based on patterns from `src/pyinfra/facts/server.py:23`:
+
+```python
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class Hostname(FactBase):
+    """
+    Returns the current hostname of the server.
+    """
+    
+    @override
+    def command(self):
+        return "uname -n"
+```
+
+## The FactBase Class
+
+All facts inherit from `FactBase`, defined in `src/pyinfra/api/facts.py:53`:
+
+```python
+class FactBase(Generic[T]):
+    name: str  # Auto-generated from module and class name
+    abstract: bool = True  # Set to False for concrete facts
+    shell_executable: str | None = None  # Override shell (e.g., for Windows)
+    
+    def command(self, *args, **kwargs) -> str | StringCommand:
+        """Return the command to execute."""
+        pass
+    
+    def requires_command(self, *args, **kwargs) -> str | None:
+        """Return command that must exist for this fact to work."""
+        return None
+    
+    @staticmethod
+    def default() -> T:
+        """Default value when fact cannot be determined."""
+        return None
+    
+    def process(self, output: list[str]) -> T:
+        """Process command output into structured data."""
+        return "\n".join(output)
+```
+
+## Creating Facts with Parameters
+
+Facts can accept parameters to customize their behavior:
+
+```python
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class Home(FactBase[str]):
+    """
+    Returns the home directory of the given user, or the current user if no user is given.
+    """
+    
+    @override
+    def command(self, user: str = ""):
+        return f"echo ~{user}"
+```
+
+Usage in operations:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Home
+
+# Get current user's home
+current_home = host.get_fact(Home)
+
+# Get specific user's home
+app_home = host.get_fact(Home, user="app")
+```
+
+## Processing Command Output
+
+The `process` method converts command output into structured data. Here's an example from the file facts:
+
+```python
+import re
+from datetime import datetime, timezone
+from typing import Optional
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class File(FactBase[Optional[dict]]):
+    """
+    Returns information about a file.
+    
+    Returns:
+        dict with keys: user, group, mode, size, mtime, atime, ctime
+        None if file doesn't exist
+        False if path exists but is not a file
+    """
+    
+    @override
+    def command(self, path: str):
+        # Linux stat command
+        return (
+            f"stat -c 'user=%U group=%G mode=%A atime=%X mtime=%Y "
+            f"ctime=%Z size=%s %N' {path} 2>/dev/null || "
+            # BSD stat command (fallback)
+            f"stat -f 'user=%Su group=%Sg mode=%Sp atime=%a mtime=%m "
+            f"ctime=%c size=%z %N%SY' {path}"
+        )
+    
+    @override
+    def process(self, output: list[str]) -> Optional[dict]:
+        if not output:
+            return None
+        
+        line = output[0]
+        
+        # Parse stat output
+        pattern = (
+            r"user=(.*) group=(.*) mode=(.*) "
+            r"atime=(-?[0-9]*) mtime=(-?[0-9]*) ctime=(-?[0-9]*) "
+            r"size=([0-9]*) (.*)"
+        )
+        match = re.match(pattern, line)
+        
+        if not match:
+            return None
+        
+        user, group, mode, atime, mtime, ctime, size, name = match.groups()
+        
+        # Convert timestamps to datetime objects
+        def parse_time(ts: str) -> Optional[datetime]:
+            try:
+                return datetime.fromtimestamp(int(ts), timezone.utc)
+            except (ValueError, TypeError):
+                return None
+        
+        return {
+            "user": user,
+            "group": group,
+            "mode": self._parse_mode(mode),
+            "size": int(size),
+            "atime": parse_time(atime),
+            "mtime": parse_time(mtime),
+            "ctime": parse_time(ctime),
+        }
+    
+    def _parse_mode(self, mode: str) -> int:
+        """Convert rwxrwxrwx to octal."""
+        # Implementation details...
+        pass
+```
+
+## Setting Default Values
+
+Provide sensible defaults when facts cannot be determined:
+
+```python
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class InstalledPackages(FactBase[list[str]]):
+    """
+    Returns a list of installed packages.
+    """
+    
+    @staticmethod
+    @override
+    def default() -> list[str]:
+        """Return empty list if packages cannot be determined."""
+        return []
+    
+    @override
+    def command(self):
+        return "dpkg-query -W -f='${Package}\\n'"
+    
+    @override
+    def process(self, output: list[str]) -> list[str]:
+        return [line.strip() for line in output if line.strip()]
+```
+
+## Complex Facts: Returning Structured Data
+
+Facts can return complex data structures like dictionaries:
+
+```python
+import json
+from typing import Dict, Any
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class DockerInfo(FactBase[Dict[str, Any]]):
+    """
+    Returns Docker daemon information.
+    """
+    
+    @override
+    def command(self):
+        return "docker info --format '{{json .}}'"
+    
+    @override
+    def requires_command(self):
+        """Requires docker command to be available."""
+        return "docker"
+    
+    @staticmethod
+    @override
+    def default() -> Dict[str, Any]:
+        return {}
+    
+    @override
+    def process(self, output: list[str]) -> Dict[str, Any]:
+        if not output:
+            return {}
+        
+        try:
+            return json.loads(output[0])
+        except json.JSONDecodeError:
+            return {}
+```
+
+## Facts with Multiple Commands
+
+Some facts need to try multiple commands for cross-platform compatibility:
+
+```python
+from pyinfra.api import FactBase, StringCommand
+from typing_extensions import override
+
+class TmpDir(FactBase[str]):
+    """
+    Returns the temporary directory of the current server.
+    
+    Checks environment variables in order: TMPDIR, TMP, TEMP
+    """
+    
+    @override
+    def command(self):
+        return StringCommand(
+            'if [ -n "$TMPDIR" ] && [ -d "$TMPDIR" ] && [ -w "$TMPDIR" ]; then',
+            '    echo "$TMPDIR"',
+            'elif [ -n "$TMP" ] && [ -d "$TMP" ] && [ -w "$TMP" ]; then',
+            '    echo "$TMP"',
+            'elif [ -n "$TEMP" ] && [ -d "$TEMP" ] && [ -w "$TEMP" ]; then',
+            '    echo "$TEMP"',
+            'else',
+            '    echo ""',
+            'fi'
+        )
+```
+
+## Using StringCommand for Complex Commands
+
+For commands with complex quoting or structure, use `StringCommand`:
+
+```python
+from pyinfra.api import FactBase, StringCommand, QuoteString
+from typing_extensions import override
+
+class FindFiles(FactBase[list[str]]):
+    """
+    Find files matching a pattern.
+    """
+    
+    @override
+    def command(self, path: str, pattern: str = "*"):
+        return StringCommand(
+            "find",
+            QuoteString(path),
+            "-type", "f",
+            "-name", QuoteString(pattern)
+        )
+    
+    @override
+    def process(self, output: list[str]) -> list[str]:
+        return [line.strip() for line in output if line.strip()]
+```
+
+## ShortFactBase: Derived Facts
+
+Create facts that derive their value from other facts:
+
+```python
+from pyinfra.api import ShortFactBase
+from typing_extensions import override
+
+class HasSystemd(ShortFactBase[bool]):
+    """
+    Returns whether systemd is available.
+    """
+    fact = Which  # Base this on the Which fact
+    
+    def process_data(self, data):
+        """Process the Which fact result."""
+        return data is not None
+
+# Usage
+from pyinfra import host
+
+has_systemd = host.get_fact(HasSystemd, command="systemctl")
+```
+
+## Complete Example: Service Status Fact
+
+Here's a complete fact that checks service status:
+
+```python
+import re
+from typing import Optional
+from pyinfra.api import FactBase
+from typing_extensions import override, TypedDict
+
+class ServiceStatus(TypedDict):
+    running: bool
+    enabled: bool
+    status: str
+
+class SystemdService(FactBase[Optional[ServiceStatus]]):
+    """
+    Returns the status of a systemd service.
+    
+    Returns:
+        dict with keys: running, enabled, status
+        None if service doesn't exist
+    """
+    
+    @override
+    def command(self, service: str):
+        return (
+            f"systemctl is-active {service}; "
+            f"systemctl is-enabled {service}; "
+            f"systemctl status {service} | head -3"
+        )
+    
+    @override
+    def requires_command(self):
+        return "systemctl"
+    
+    @staticmethod
+    @override
+    def default() -> Optional[ServiceStatus]:
+        return None
+    
+    @override
+    def process(self, output: list[str]) -> Optional[ServiceStatus]:
+        if not output:
+            return None
+        
+        # Parse output
+        # Line 1: is-active (active/inactive/failed)
+        # Line 2: is-enabled (enabled/disabled)
+        # Lines 3+: status output
+        
+        if len(output) < 2:
+            return None
+        
+        is_active = output[0].strip()
+        is_enabled = output[1].strip()
+        status_lines = output[2:] if len(output) > 2 else []
+        
+        return {
+            "running": is_active == "active",
+            "enabled": is_enabled == "enabled",
+            "status": "\n".join(status_lines)
+        }
+```
+
+Usage:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation
+
+@operation()
+def ensure_service_running(service: str):
+    """Ensure a service is running."""
+    status = host.get_fact(SystemdService, service=service)
+    
+    if status is None:
+        raise OperationError(f"Service {service} does not exist")
+    
+    if not status["running"]:
+        yield f"systemctl start {service}"
+    
+    if not status["enabled"]:
+        yield f"systemctl enable {service}"
+```
+
+## Error Handling in Facts
+
+Handle errors gracefully:
+
+```python
+from pyinfra.api import FactBase
+from pyinfra.api.exceptions import FactProcessError
+from typing_extensions import override
+
+class JsonConfigFile(FactBase[dict]):
+    """
+    Parse a JSON configuration file.
+    """
+    
+    @override
+    def command(self, path: str):
+        return f"cat {path}"
+    
+    @staticmethod
+    @override
+    def default() -> dict:
+        return {}
+    
+    @override
+    def process(self, output: list[str]) -> dict:
+        if not output:
+            return {}
+        
+        try:
+            import json
+            content = "\n".join(output)
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            raise FactProcessError(
+                f"Failed to parse JSON: {e}"
+            )
+```
+
+## Shell Executable Override
+
+Override the shell for platform-specific facts:
+
+```python
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class WindowsService(FactBase):
+    """
+    Get Windows service status (requires WinRM connector).
+    """
+    
+    # Use PowerShell instead of sh
+    shell_executable = "powershell"
+    
+    @override
+    def command(self, service: str):
+        return f"Get-Service -Name {service} | ConvertTo-Json"
+    
+    @override
+    def process(self, output: list[str]) -> dict:
+        import json
+        return json.loads("\n".join(output))
+```
+
+## Testing Facts
+
+Test facts during development:
+
+```python
+# In a deploy script or test file
+from pyinfra import host
+from pyinfra.facts.custom import MyCustomFact
+
+# Get the fact
+result = host.get_fact(MyCustomFact, param1="value1")
+
+print(f"Fact result: {result}")
+print(f"Result type: {type(result)}")
+
+# Test with different parameters
+for param in ["a", "b", "c"]:
+    result = host.get_fact(MyCustomFact, param1=param)
+    print(f"{param}: {result}")
+```
+
+## Best Practices
+
+1. **Use type hints**: Specify the return type with `FactBase[T]` for better IDE support
+2. **Provide defaults**: Always implement `default()` for graceful fallback
+3. **Handle missing commands**: Use `requires_command()` for command dependencies
+4. **Parse robustly**: Handle edge cases in `process()` - empty output, malformed data, etc.
+5. **Cache-friendly**: Facts are cached by parameters, so ensure parameters uniquely identify the result
+6. **Cross-platform**: Consider using command fallbacks for Linux/BSD/macOS compatibility
+7. **Document return types**: Clearly document what the fact returns and when it returns None/default
+8. **Quote paths**: Use `QuoteString` for file paths that might contain spaces
+9. **Error messages**: Raise `FactProcessError` with helpful messages when processing fails
+10. **Test thoroughly**: Test facts on all target platforms with various edge cases
+
+## Fact Naming Convention
+
+Facts are automatically named as `module.ClassName`:
+
+```python
+# File: pyinfra/facts/custom.py
+class MyFact(FactBase):
+    pass
+
+# Fact name will be: custom.MyFact
+```
+
+## Next Steps
+
+- Learn about [Writing Operations](/advanced/writing-operations) to use your facts
+- Explore [Writing Connectors](/advanced/writing-connectors) for custom connection methods
+- See [API Reference](/api-reference) for complete API documentation
+- Check [Performance Tuning](/advanced/performance-tuning) for optimization tips

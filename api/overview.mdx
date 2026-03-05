@@ -1,0 +1,142 @@
+---
+title: API Overview
+description: Complete reference for pyinfra's Python API
+---
+
+pyinfra's API enables you to use pyinfra programmatically in Python scripts and applications. This allows you to build custom deployment tools, integrate with other systems, and create reusable infrastructure components.
+
+## Core Components
+
+The pyinfra API is organized into several key modules:
+
+### Operations & Deploys
+
+- **[@operation](/api/operation)** - Decorator for creating custom operations
+- **[@deploy](/api/deploy)** - Decorator for creating reusable deploy functions
+- **[add_op](/api/operation#add_op)** - Programmatically add operations to state
+- **[add_deploy](/api/deploy#add_deploy)** - Programmatically add deploys to state
+
+### State Management
+
+- **[State](/api/state)** - Manages the state of a pyinfra deployment
+- **[Inventory](/api/inventory)** - Represents a collection of target hosts
+- **[Host](/api/host)** - Represents a single target host
+- **[Config](/api/config)** - Configuration options for deployments
+
+### Commands
+
+- **[StringCommand](/api/commands#stringcommand)** - Execute shell commands
+- **[FileUploadCommand](/api/commands#fileuploadcommand)** - Upload files to hosts
+- **[FileDownloadCommand](/api/commands#filedownloadcommand)** - Download files from hosts
+- **[FunctionCommand](/api/commands#functioncommand)** - Execute Python functions
+- **[RsyncCommand](/api/commands#rsynccommand)** - Sync files using rsync
+
+### Connectors
+
+Connectors handle communication with target hosts:
+
+- **[SSH](/api/connectors/ssh)** - Connect via SSH (default)
+- **[Local](/api/connectors/local)** - Execute on local machine
+- **[Docker](/api/connectors/docker)** - Execute in Docker containers
+- **[Terraform](/api/connectors/terraform)** - Generate inventory from Terraform
+- **[Vagrant](/api/connectors/vagrant)** - Generate inventory from Vagrant
+
+### Facts
+
+Facts gather information about target hosts:
+
+- **[Server Facts](/api/facts/server)** - System information
+- **[File Facts](/api/facts/files)** - Filesystem information
+- **[Package Facts](/api/facts/packages)** - Package manager information
+
+## Quick Start
+
+Here's a simple example using the pyinfra API:
+
+```python
+from pyinfra import Config, Inventory, State
+from pyinfra.operations import server
+
+# Create inventory with target hosts
+inventory = Inventory(
+    ([
+        "server1.example.com",
+        "server2.example.com",
+    ], {})
+)
+
+# Create config
+config = Config(
+    SUDO=True,
+)
+
+# Initialize state
+state = State(inventory, config)
+state.init(inventory, config)
+
+# Connect to hosts
+for host in inventory:
+    host.connect()
+
+# Add operations
+server.shell(
+    name="Hello from pyinfra API!",
+    commands=["echo 'Hello World'"],
+    state=state,
+    host=inventory,
+)
+
+# Execute operations
+from pyinfra.api.operations import run_ops
+run_ops(state)
+```
+
+## CLI vs API Mode
+
+pyinfra operates in two modes:
+
+- **CLI Mode** - When running `pyinfra` command-line tool
+- **API Mode** - When using pyinfra as a Python library
+
+Some functions behave differently depending on the mode:
+
+- `add_op()` and `add_deploy()` should only be called in API mode
+- Operations automatically execute immediately in API mode when called during the execute phase
+
+## Context Management
+
+pyinfra uses context variables to track the current state, host, and config:
+
+```python
+from pyinfra.context import ctx_state, ctx_host, ctx_config
+
+# Access current context
+state = ctx_state.get()
+host = ctx_host.get()
+config = ctx_config.get()
+```
+
+## Type Safety
+
+pyinfra includes type hints for better IDE support and type checking:
+
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyinfra.api import State, Host
+
+def my_deploy(state: "State", host: "Host") -> None:
+    # Type-safe operations
+    pass
+```
+
+## Next Steps
+
+Explore the detailed API reference:
+
+- [Operations](/api/operation) - Create custom operations
+- [Deploy](/api/deploy) - Create reusable deploys
+- [State](/api/state) - Understand state management
+- [Host](/api/host) - Work with individual hosts
+- [Inventory](/api/inventory) - Manage host collections

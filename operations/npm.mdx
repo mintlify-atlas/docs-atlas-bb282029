@@ -1,0 +1,416 @@
+---
+title: npm Operations
+description: Manage Node.js packages with npm
+icon: node-js
+---
+
+The `npm` module manages Node.js packages using npm (Node Package Manager).
+
+## Functions
+
+### packages
+
+Install, remove, or update npm packages.
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install Node.js packages",
+    packages=["express", "lodash"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be present.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="directory" type="str">
+  Directory to manage packages for. Defaults to global installation.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like npm: `<pkg>@<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Global Installation
+from pyinfra.operations import npm
+
+# Install packages globally
+npm.packages(
+    name="Install global npm packages",
+    packages=["typescript", "nodemon"],
+)
+```
+
+```python Project Installation
+from pyinfra.operations import npm
+
+# Install packages in a project directory
+npm.packages(
+    name="Install project dependencies",
+    packages=["express", "mongoose", "dotenv"],
+    directory="/var/www/myapp",
+)
+```
+
+```python Version Pinning
+from pyinfra.operations import npm
+
+# Install specific versions
+npm.packages(
+    name="Install specific versions",
+    packages=[
+        "express@4.18.2",
+        "react@18.2.0",
+        "typescript@5.0.4",
+    ],
+    directory="/app",
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import npm
+
+# Always install latest versions
+npm.packages(
+    name="Install latest packages",
+    packages=["express", "lodash"],
+    latest=True,
+    directory="/app",
+)
+```
+</CodeGroup>
+
+## Common Use Cases
+
+### Express.js Application Setup
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install Express.js dependencies",
+    packages=[
+        "express@4.18.2",
+        "body-parser",
+        "cors",
+        "dotenv",
+        "mongoose",
+    ],
+    directory="/var/www/api",
+)
+```
+
+### React Application
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install React dependencies",
+    packages=[
+        "react@18.2.0",
+        "react-dom@18.2.0",
+        "react-router-dom",
+        "axios",
+    ],
+    directory="/var/www/frontend",
+)
+```
+
+### Global Development Tools
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install global development tools",
+    packages=[
+        "typescript",
+        "nodemon",
+        "pm2",
+        "eslint",
+        "prettier",
+    ],
+)
+```
+
+### Install from package.json
+
+```python
+from pyinfra.operations import server
+
+# Install all dependencies from package.json
+server.shell(
+    name="Install npm dependencies",
+    commands=["cd /app && npm install"],
+)
+```
+
+### Build Tools
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install build tools",
+    packages=[
+        "webpack",
+        "webpack-cli",
+        "babel-loader",
+        "@babel/core",
+        "@babel/preset-env",
+    ],
+    directory="/var/www/myapp",
+)
+```
+
+### Testing Framework
+
+```python
+from pyinfra.operations import npm
+
+npm.packages(
+    name="Install testing tools",
+    packages=[
+        "jest",
+        "@testing-library/react",
+        "@testing-library/jest-dom",
+        "supertest",
+    ],
+    directory="/app",
+)
+```
+
+## npm-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Global vs Local Packages">
+    **Global packages** (no `directory` parameter):
+    - Installed system-wide
+    - Typically CLI tools
+    - Use `npm install -g`
+    
+    **Local packages** (with `directory` parameter):
+    - Installed in project's `node_modules`
+    - Project dependencies
+    - Use `npm install` in directory
+    
+    ```python
+    from pyinfra.operations import npm
+    
+    # Global: CLI tools
+    npm.packages(
+        name="Install global tools",
+        packages=["typescript", "nodemon"],
+    )
+    
+    # Local: Project dependencies
+    npm.packages(
+        name="Install project dependencies",
+        packages=["express", "mongoose"],
+        directory="/app",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Using package.json">
+    For full project setups, use package.json:
+    
+    ```python
+    from pyinfra.operations import files, server
+    
+    # Upload package.json
+    files.put(
+        name="Upload package.json",
+        src="local/package.json",
+        dest="/app/package.json",
+    )
+    
+    # Install all dependencies
+    server.shell(
+        name="Install npm dependencies",
+        commands=["cd /app && npm install"],
+    )
+    
+    # For production (skip devDependencies)
+    server.shell(
+        name="Install production dependencies",
+        commands=["cd /app && npm install --production"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Update Packages">
+    Update packages to latest versions:
+    
+    ```python
+    from pyinfra.operations import npm
+    
+    # Update specific packages
+    npm.packages(
+        name="Update packages",
+        packages=["express", "lodash"],
+        latest=True,
+        directory="/app",
+    )
+    
+    # Or use npm update directly
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Update all packages",
+        commands=["cd /app && npm update"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Scoped Packages">
+    Install scoped packages (organization packages):
+    
+    ```python
+    from pyinfra.operations import npm
+    
+    npm.packages(
+        name="Install scoped packages",
+        packages=[
+            "@babel/core",
+            "@testing-library/react",
+            "@types/node",
+        ],
+        directory="/app",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Clean Install">
+    Perform a clean install (removes node_modules):
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Clean install dependencies",
+        commands=[
+            "cd /app",
+            "rm -rf node_modules",
+            "npm ci",  # Clean install from package-lock.json
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Private Registries">
+    Install from private npm registries:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Set registry
+    server.shell(
+        name="Configure private registry",
+        commands=[
+            "npm config set registry https://registry.company.com",
+        ],
+    )
+    
+    # Or use .npmrc file
+    from pyinfra.operations import files
+    
+    files.put(
+        name="Upload .npmrc",
+        src="local/.npmrc",
+        dest="/app/.npmrc",
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use package-lock.json">
+    Always commit and deploy package-lock.json for reproducible builds:
+    
+    ```python
+    from pyinfra.operations import files, server
+    
+    files.put(
+        name="Upload package files",
+        src="local/package.json",
+        dest="/app/package.json",
+    )
+    
+    files.put(
+        name="Upload lock file",
+        src="local/package-lock.json",
+        dest="/app/package-lock.json",
+    )
+    
+    server.shell(
+        name="Install exact versions",
+        commands=["cd /app && npm ci"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Separate Dev and Production">
+    ```python
+    from pyinfra.operations import server
+    
+    # Production: skip devDependencies
+    server.shell(
+        name="Install production dependencies",
+        commands=["cd /app && npm install --production"],
+    )
+    
+    # Development: install all
+    server.shell(
+        name="Install all dependencies",
+        commands=["cd /app && npm install"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Pin Major Versions">
+    ```python
+    from pyinfra.operations import npm
+    
+    # Pin major versions for stability
+    npm.packages(
+        name="Install with version constraints",
+        packages=[
+            "express@4.18.2",    # Exact version
+            "lodash@^4.17.21",    # Compatible version
+        ],
+        directory="/app",
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Note>
+  When no `directory` is specified, packages are installed globally using `npm install -g`.
+</Note>
+
+<Warning>
+  Global npm installations may require sudo/administrator privileges depending on Node.js installation.
+</Warning>
+
+<Tip>
+  For production deployments, use `npm ci` instead of `npm install` for faster, more reliable builds.
+</Tip>

@@ -1,0 +1,390 @@
+---
+title: Config
+description: Configuration options for pyinfra deployments
+---
+
+The `Config` class defines configuration options that control how pyinfra executes operations, connects to hosts, and handles errors.
+
+## Creating a Config
+
+Create a config object with custom settings:
+
+```python
+from pyinfra import Config
+
+# Use defaults
+config = Config()
+
+# Custom configuration
+config = Config(
+    SUDO=True,
+    SUDO_USER="root",
+    PARALLEL=10,
+    FAIL_PERCENT=25,
+    CONNECT_TIMEOUT=30,
+)
+```
+
+## Configuration Options
+
+### Execution Control
+
+<ParamField path="PARALLEL" type="int" default="auto">
+  Number of parallel operations. Defaults to 20 × CPU cores, capped by system file limits.
+</ParamField>
+
+<ParamField path="FAIL_PERCENT" type="int | None" default={null}>
+  Maximum percentage of hosts that can fail before stopping. `None` means no limit.
+</ParamField>
+
+<ParamField path="CONNECT_TIMEOUT" type="int" default={10}>
+  Timeout in seconds for SSH connections.
+</ParamField>
+
+### Privilege Escalation - sudo
+
+<ParamField path="SUDO" type="bool" default={false}>
+  Whether to use sudo for operations.
+</ParamField>
+
+<ParamField path="SUDO_USER" type="str | None" default={null}>
+  User to sudo as. `None` means root.
+</ParamField>
+
+<ParamField path="SUDO_PASSWORD" type="str | None" default={null}>
+  Password for sudo authentication.
+</ParamField>
+
+<ParamField path="USE_SUDO_LOGIN" type="bool" default={false}>
+  Use sudo with login shell (`-i` flag).
+</ParamField>
+
+<ParamField path="PRESERVE_SUDO_ENV" type="bool" default={false}>
+  Preserve environment when using sudo (`-E` flag).
+</ParamField>
+
+### Privilege Escalation - su
+
+<ParamField path="SU_USER" type="str | None" default={null}>
+  User to switch to using su.
+</ParamField>
+
+<ParamField path="SU_PASSWORD" type="str | None" default={null}>
+  Password for su authentication.
+</ParamField>
+
+<ParamField path="USE_SU_LOGIN" type="bool" default={false}>
+  Use su with login shell (`-` flag).
+</ParamField>
+
+<ParamField path="SU_SHELL" type="bool" default={false}>
+  Use su with shell (`-s` flag).
+</ParamField>
+
+<ParamField path="PRESERVE_SU_ENV" type="bool" default={false}>
+  Preserve environment when using su (`-p` flag).
+</ParamField>
+
+### Privilege Escalation - doas
+
+<ParamField path="DOAS" type="bool" default={false}>
+  Whether to use doas for operations (BSD/OpenBSD systems).
+</ParamField>
+
+<ParamField path="DOAS_USER" type="str | None" default={null}>
+  User to doas as.
+</ParamField>
+
+### Shell & Execution
+
+<ParamField path="SHELL" type="str" default="sh">
+  Shell to use for command execution.
+</ParamField>
+
+<ParamField path="IGNORE_ERRORS" type="bool" default={false}>
+  Show errors but don't count as failures.
+</ParamField>
+
+<ParamField path="DIFF" type="bool" default={false}>
+  Show full file diffs for file operations.
+</ParamField>
+
+### Retry Logic
+
+<ParamField path="RETRY" type="int" default={0}>
+  Number of times to retry failed operations.
+</ParamField>
+
+<ParamField path="RETRY_DELAY" type="int" default={5}>
+  Delay in seconds between retry attempts.
+</ParamField>
+
+### Temporary Files
+
+<ParamField path="TEMP_DIR" type="str | None" default={null}>
+  Temporary directory on remote hosts. `None` uses host's `$TMPDIR` or falls back to `DEFAULT_TEMP_DIR`.
+</ParamField>
+
+<ParamField path="DEFAULT_TEMP_DIR" type="str" default="/tmp">
+  Default temporary directory when `TEMP_DIR` is not set.
+</ParamField>
+
+### Version Requirements
+
+<ParamField path="REQUIRE_PYINFRA_VERSION" type="str | None" default={null}>
+  Required pyinfra version (PEP 440 specifier).
+</ParamField>
+
+<ParamField path="REQUIRE_PACKAGES" type="str | list | None" default={null}>
+  Required packages (PEP 440 specifiers or requirements file path).
+</ParamField>
+
+## Using Configuration
+
+### In State
+
+```python
+from pyinfra import Inventory, Config, State
+
+inventory = Inventory((["host1"], {}))
+config = Config(SUDO=True, PARALLEL=5)
+
+state = State(inventory, config)
+state.init(inventory, config)
+```
+
+### Per-Operation Override
+
+Configuration can be overridden per operation:
+
+```python
+from pyinfra.operations import server
+
+# Use config defaults
+server.shell(commands=["whoami"])
+
+# Override for this operation
+server.shell(
+    commands=["whoami"],
+    _sudo=True,
+    _sudo_user="postgres",
+    _ignore_errors=True,
+)
+```
+
+### In Inventory Data
+
+Configuration can be set via inventory data:
+
+```python
+from pyinfra import Inventory
+
+inventory = Inventory(
+    ([
+        ("host1", {"ssh_user": "ubuntu"}),
+    ], {
+        "SUDO": True,
+        "SUDO_USER": "root",
+    })
+)
+```
+
+## Config Methods
+
+### Get Current State
+
+Get all current configuration values:
+
+```python
+config_state = config.get_current_state()
+for key, value in config_state:
+    print(f"{key}: {value}")
+```
+
+### Set Current State
+
+Set configuration from state:
+
+```python
+config.set_current_state([
+    ("SUDO", True),
+    ("PARALLEL", 10),
+])
+```
+
+### Lock and Reset State
+
+Lock configuration and restore later:
+
+```python
+# Save current state
+config.lock_current_state()
+
+# Modify config
+config.SUDO = True
+config.PARALLEL = 20
+
+# Restore locked state
+config.reset_locked_state()
+```
+
+### Copy Config
+
+Create a copy of the configuration:
+
+```python
+original_config = Config(SUDO=True)
+config_copy = original_config.copy()
+
+# Modify copy without affecting original
+config_copy.PARALLEL = 10
+```
+
+## Version Requirements
+
+### Require Specific pyinfra Version
+
+```python
+config = Config(
+    REQUIRE_PYINFRA_VERSION=">=3.0,<4.0"
+)
+```
+
+This uses PEP 440 version specifiers:
+- `">=3.0"` - Version 3.0 or higher
+- `">=3.0,<4.0"` - Version 3.x only
+- `"==3.1.2"` - Exact version
+
+### Require Packages
+
+```python
+# Require specific packages
+config = Config(
+    REQUIRE_PACKAGES=[
+        "requests>=2.28.0",
+        "jinja2>=3.0",
+    ]
+)
+
+# Or use requirements file
+config = Config(
+    REQUIRE_PACKAGES="requirements.txt"
+)
+```
+
+## Environment Variables
+
+Pass environment variables to commands:
+
+```python
+config = Config(
+    ENV={
+        "PATH": "/custom/bin:$PATH",
+        "DEBIAN_FRONTEND": "noninteractive",
+    }
+)
+```
+
+## Complete Example
+
+Here's a complete example with comprehensive configuration:
+
+```python
+from pyinfra import Inventory, Config, State
+from pyinfra.operations import server, apt
+
+# Production configuration
+production_config = Config(
+    # Execution
+    PARALLEL=10,
+    FAIL_PERCENT=10,  # Stop if >10% hosts fail
+    CONNECT_TIMEOUT=30,
+    
+    # Privilege escalation
+    SUDO=True,
+    SUDO_USER="root",
+    PRESERVE_SUDO_ENV=True,
+    
+    # Retry logic
+    RETRY=3,
+    RETRY_DELAY=10,
+    
+    # Shell configuration
+    SHELL="bash",
+    IGNORE_ERRORS=False,
+    DIFF=True,  # Show file diffs
+    
+    # Temporary files
+    TEMP_DIR="/var/tmp",
+    
+    # Environment
+    ENV={
+        "DEBIAN_FRONTEND": "noninteractive",
+        "PYTHONUNBUFFERED": "1",
+    },
+    
+    # Version requirements
+    REQUIRE_PYINFRA_VERSION=">=3.0",
+    REQUIRE_PACKAGES=[
+        "jinja2>=3.0",
+    ],
+)
+
+# Development configuration
+dev_config = Config(
+    PARALLEL=2,
+    SUDO=True,
+    IGNORE_ERRORS=True,  # Don't stop on errors in dev
+    SHELL="bash",
+)
+
+# Use configuration
+inventory = Inventory((["host1", "host2"], {}))
+state = State(inventory, production_config)
+state.init(inventory, production_config)
+
+# Operations use config settings
+server.shell(
+    name="Update system",
+    commands=["apt-get update"],
+    # Uses SUDO=True from config
+)
+
+# Override config for specific operation
+server.shell(
+    name="Check as user",
+    commands=["whoami"],
+    _sudo=False,  # Override config
+)
+
+apt.packages(
+    name="Install packages",
+    packages=["nginx", "postgresql"],
+    update=True,
+    # Uses SUDO=True and RETRY=3 from config
+)
+```
+
+## Configuration Priority
+
+Configuration is applied in this order (highest to lowest priority):
+
+1. Operation-level arguments (`_sudo=True`)
+2. Host data configuration
+3. Group data configuration
+4. Inventory global data
+5. Config object settings
+6. Default values
+
+## Source Reference
+
+Location: `src/pyinfra/api/config.py:203`
+
+### Key Classes
+
+- `Config` - Main configuration class (line 203)
+- `ConfigDefaults` - Default values (line 20)
+
+### Default Values
+
+All defaults are defined in `ConfigDefaults` (line 20) and can be viewed in the source.

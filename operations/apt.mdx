@@ -1,0 +1,399 @@
+---
+title: apt Operations
+description: Manage apt packages and repositories on Debian/Ubuntu systems
+icon: ubuntu
+---
+
+The `apt` module manages packages and repositories on Debian-based systems using the apt package manager.
+
+## Functions
+
+### packages
+
+Install, remove, or update apt packages.
+
+```python
+from pyinfra.operations import apt
+
+apt.packages(
+    name="Install web server",
+    packages=["nginx", "certbot"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure. Can be a single package name or a list of package names.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `apt update` before installing packages.
+</ParamField>
+
+<ParamField path="cache_time" type="int">
+  When used with `update`, cache package index for this many seconds.
+</ParamField>
+
+<ParamField path="upgrade" type="bool" default={false}>
+  Run `apt upgrade` before installing packages.
+</ParamField>
+
+<ParamField path="force" type="bool" default={false}>
+  Force package installs by passing `--force-yes` to apt.
+</ParamField>
+
+<ParamField path="no_recommends" type="bool" default={false}>
+  Don't install recommended packages.
+</ParamField>
+
+<ParamField path="allow_downgrades" type="bool" default={false}>
+  Allow downgrading packages with version (--allow-downgrades).
+</ParamField>
+
+<ParamField path="extra_install_args" type="str">
+  Additional arguments to the apt install command.
+</ParamField>
+
+<ParamField path="extra_uninstall_args" type="str">
+  Additional arguments to the apt uninstall command.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like apt: `<pkg>=<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import apt
+
+# Update package list and install packages
+apt.packages(
+    name="Install Asterisk and Vim",
+    packages=["asterisk", "vim"],
+    update=True,
+)
+```
+
+```python Version Pinning
+from pyinfra import host
+from pyinfra.operations import apt
+from pyinfra.facts.server import OsVersion
+
+# Install kernel headers matching current kernel
+apt.packages(
+    name="Install kernel headers",
+    packages=[f"linux-headers-{host.get_fact(OsVersion)}"],
+    update=True,
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import apt
+
+# Install the latest versions of packages (always check)
+apt.packages(
+    name="Install latest Vim",
+    packages=["vim"],
+    latest=True,
+)
+```
+
+```python Without Recommends
+from pyinfra.operations import apt
+
+# Install without recommended packages
+apt.packages(
+    name="Install minimal nginx",
+    packages=["nginx"],
+    no_recommends=True,
+)
+```
+</CodeGroup>
+
+---
+
+### update
+
+Update apt package indexes.
+
+```python
+from pyinfra.operations import apt
+
+apt.update(
+    name="Update apt repositories",
+    cache_time=3600,
+)
+```
+
+<ParamField path="cache_time" type="int">
+  Cache updates for this many seconds. When set, the `/var/lib/apt/periodic/update-success-stamp` file is touched upon successful update.
+</ParamField>
+
+<Warning>
+  This operation is **not idempotent** by default unless `cache_time` is specified.
+</Warning>
+
+---
+
+### upgrade
+
+Upgrade all apt packages.
+
+```python
+from pyinfra.operations import apt
+
+apt.upgrade(
+    name="Upgrade all packages",
+    auto_remove=True,
+)
+```
+
+<ParamField path="auto_remove" type="bool" default={false}>
+  Remove transitive dependencies that are no longer needed.
+</ParamField>
+
+---
+
+### dist_upgrade
+
+Upgrade all apt packages using dist-upgrade.
+
+```python
+from pyinfra.operations import apt
+
+apt.dist_upgrade(
+    name="Upgrade apt packages using dist-upgrade",
+    auto_remove=True,
+)
+```
+
+<ParamField path="auto_remove" type="bool" default={false}>
+  Remove transitive dependencies that are no longer needed.
+</ParamField>
+
+---
+
+### repo
+
+Add or remove apt repositories.
+
+```python
+from pyinfra.operations import apt
+
+apt.repo(
+    name="Install VirtualBox repo",
+    src="deb https://download.virtualbox.org/virtualbox/debian bionic contrib",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Apt source string, e.g., `deb http://example.com hardy main`
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the repo should exist on the system.
+</ParamField>
+
+<ParamField path="filename" type="str">
+  Optional filename to use `/etc/apt/sources.list.d/<filename>.list`. By default uses `/etc/apt/sources.list`.
+</ParamField>
+
+---
+
+### ppa
+
+Add or remove Ubuntu PPA repositories.
+
+```python
+from pyinfra.operations import apt
+
+apt.ppa(
+    name="Add the Bitcoin ppa",
+    src="ppa:bitcoin/bitcoin",
+)
+```
+
+<ParamField path="src" type="str" required>
+  The PPA name in full `ppa:user/repo` format.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether it should exist.
+</ParamField>
+
+<Note>
+  Requires `apt-add-repository` (from `software-properties-common`) on the remote host.
+</Note>
+
+<Warning>
+  This operation is **not idempotent**.
+</Warning>
+
+---
+
+### deb
+
+Install or remove .deb package files.
+
+```python
+from pyinfra.operations import apt
+
+apt.deb(
+    name="Install Chrome via deb",
+    src="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Filename or URL of the `.deb` file.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the package should exist on the system.
+</ParamField>
+
+<ParamField path="force" type="bool" default={false}>
+  Force package install by passing `--force-yes` to apt.
+</ParamField>
+
+<Note>
+  When installing, `apt-get install -f` will be run to install any unmet dependencies.
+</Note>
+
+<Warning>
+  **URL sources with `present=False`**: If the `.deb` file isn't downloaded, pyinfra can't remove any existing package as the file won't exist until mid-deploy.
+</Warning>
+
+---
+
+### key
+
+Add apt GPG keys.
+
+```python
+from pyinfra.operations import apt
+
+apt.key(
+    name="Add the Docker apt gpg key",
+    src="https://download.docker.com/linux/ubuntu/gpg",
+)
+```
+
+<ParamField path="src" type="str">
+  Filename or URL of the key file.
+</ParamField>
+
+<ParamField path="keyserver" type="str">
+  URL of keyserver to fetch key from.
+</ParamField>
+
+<ParamField path="keyid" type="str | list[str]">
+  Key ID or list of key IDs when using keyserver.
+</ParamField>
+
+<Note>
+  `keyserver` and `keyid` must be provided together.
+</Note>
+
+<Warning>
+  `apt-key` is **deprecated** in Debian. It is recommended NOT to use this operation. Instead, follow the instructions at: https://wiki.debian.org/DebianRepository/UseThirdParty
+</Warning>
+
+#### Examples
+
+<CodeGroup>
+```python From URL
+from pyinfra.operations import apt
+
+apt.key(
+    name="Add the Docker apt gpg key",
+    src="https://download.docker.com/linux/ubuntu/gpg",
+)
+```
+
+```python From Keyserver
+from pyinfra.operations import apt
+
+apt.key(
+    name="Add VirtualBox key from keyserver",
+    keyserver="keyserver.ubuntu.com",
+    keyid="A2F683C52980AECF",
+)
+```
+</CodeGroup>
+
+## Common Use Cases
+
+### Full System Update
+
+```python
+from pyinfra.operations import apt
+
+# Update package list
+apt.update(
+    name="Update package list",
+    cache_time=3600,
+)
+
+# Upgrade all packages
+apt.upgrade(
+    name="Upgrade all packages",
+    auto_remove=True,
+)
+```
+
+### Install from Third-Party Repository
+
+```python
+from pyinfra.operations import apt
+
+# Add repository key
+apt.key(
+    name="Add Docker GPG key",
+    src="https://download.docker.com/linux/ubuntu/gpg",
+)
+
+# Add repository
+apt.repo(
+    name="Add Docker repository",
+    src="deb https://download.docker.com/linux/ubuntu focal stable",
+    filename="docker",
+)
+
+# Update and install
+apt.packages(
+    name="Install Docker",
+    packages=["docker-ce", "docker-ce-cli", "containerd.io"],
+    update=True,
+)
+```
+
+### Development Environment Setup
+
+```python
+from pyinfra.operations import apt
+
+apt.packages(
+    name="Install development tools",
+    packages=[
+        "build-essential",
+        "git",
+        "vim",
+        "tmux",
+        "curl",
+        "wget",
+    ],
+    update=True,
+    cache_time=3600,
+)
+```

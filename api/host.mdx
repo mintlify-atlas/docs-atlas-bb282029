@@ -1,0 +1,400 @@
+---
+title: Host
+description: Represents a target host in pyinfra's inventory
+---
+
+The `Host` class represents a single target host and provides access to facts, data, and connector methods for interacting with that host.
+
+## Host Class
+
+A `Host` object is created automatically by pyinfra when building the inventory. You typically access hosts through the inventory or the current context.
+
+```python
+from pyinfra import host, Inventory
+
+# Access current host in operation/deploy context
+current_host = host
+
+# Get specific host from inventory
+inventory = Inventory((["web1", "web2"], {}))
+web1 = inventory.get_host("web1")
+```
+
+## Properties
+
+<ResponseField name="name" type="str">
+  The hostname or identifier for this host.
+</ResponseField>
+
+<ResponseField name="groups" type="list[str]">
+  List of group names this host belongs to.
+</ResponseField>
+
+<ResponseField name="data" type="HostData">
+  Access to host data with waterfall lookup (override > host > group > global > deploy).
+</ResponseField>
+
+<ResponseField name="inventory" type="Inventory">
+  Reference to the parent inventory.
+</ResponseField>
+
+<ResponseField name="state" type="State">
+  Reference to the current state object.
+</ResponseField>
+
+<ResponseField name="connector" type="BaseConnector">
+  The connector instance for this host.
+</ResponseField>
+
+<ResponseField name="connected" type="bool">
+  Whether the host is currently connected.
+</ResponseField>
+
+<ResponseField name="in_op" type="bool">
+  Whether currently inside an operation function.
+</ResponseField>
+
+<ResponseField name="in_deploy" type="bool">
+  Whether currently inside a deploy function.
+</ResponseField>
+
+## Host Data
+
+Access host data with waterfall lookup:
+
+```python
+from pyinfra import host
+
+# Access data attributes
+app_port = host.data.app_port
+ssh_user = host.data.ssh_user
+
+# Get with default
+api_key = host.data.get("api_key", "default-key")
+
+# Get all data as dict
+all_data = host.data.dict()
+```
+
+Data lookup order:
+1. Deploy data (from `@deploy` decorator)
+2. Override data (from inventory)
+3. Host-specific data
+4. Group data
+5. Global inventory data
+
+## Facts
+
+Retrieve information about the host using facts:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Hostname, LinuxDistribution
+from pyinfra.facts.files import File
+
+# Get simple fact
+hostname = host.get_fact(Hostname)
+print(f"Hostname: {hostname}")
+
+# Get fact with arguments
+file_info = host.get_fact(File, path="/etc/hosts")
+if file_info:
+    print(f"Size: {file_info['size']} bytes")
+
+# Get complex fact
+distro = host.get_fact(LinuxDistribution)
+print(f"Running {distro['name']} {distro['version']}")
+```
+
+### get_fact Method
+
+```python
+def get_fact(
+    self,
+    name_or_cls: Type[FactBase[T]],
+    *args,
+    **kwargs
+) -> T:
+    """Get a fact for this host, reading from cache if present."""
+```
+
+## Connector Methods
+
+The Host class provides direct access to connector methods:
+
+### connect()
+
+Connect to the host:
+
+```python
+host.connect(
+    reason="Deploy starting",
+    show_errors=True,
+    raise_exceptions=False
+)
+```
+
+<ParamField path="reason" type="str" optional>
+  Optional reason for connection (shown in logs).
+</ParamField>
+
+<ParamField path="show_errors" type="bool" default={true}>
+  Whether to display connection errors.
+</ParamField>
+
+<ParamField path="raise_exceptions" type="bool" default={false}>
+  Whether to raise exceptions on connection failure.
+</ParamField>
+
+### disconnect()
+
+Disconnect from the host:
+
+```python
+host.disconnect()
+```
+
+### run_shell_command()
+
+Execute a shell command on the host:
+
+```python
+success, output = host.run_shell_command(
+    StringCommand("ls -la /tmp"),
+    sudo=True,
+    print_output=True,
+)
+
+if success:
+    for line in output.stdout_lines:
+        print(line)
+```
+
+### put_file()
+
+Upload a file to the host:
+
+```python
+success = host.put_file(
+    src="local/config.txt",
+    dest="/etc/app/config.txt",
+    sudo=True,
+    print_output=True,
+)
+```
+
+### get_file()
+
+Download a file from the host:
+
+```python
+success = host.get_file(
+    src="/var/log/app.log",
+    dest="local/app.log",
+    print_output=True,
+)
+```
+
+### rsync()
+
+Sync files using rsync (if supported by connector):
+
+```python
+host.check_can_rsync()  # Check if rsync is available
+
+success = host.rsync(
+    src="local/files/",
+    dest="/var/www/html/",
+    flags=["-avz"],
+)
+```
+
+## Logging
+
+Log messages with the host prefix:
+
+```python
+from pyinfra import host, logger
+
+# Simple log
+host.log("Starting deployment")
+
+# With custom log level
+host.log("Warning message", log_func=logger.warning)
+
+# Styled log with colors
+host.log_styled(
+    "Error occurred",
+    log_func=logger.error,
+    fg="red",
+    bold=True
+)
+```
+
+## Noop Operations
+
+Log when operations would do nothing:
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import File
+
+file_info = host.get_fact(File, path="/etc/config.txt")
+
+if file_info:
+    host.noop("Config file already exists")
+else:
+    # Create the file
+    pass
+```
+
+## Conditional Execution
+
+Use `host.when()` for conditional operations:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Which
+from pyinfra.operations import apt
+
+def nginx_not_installed():
+    return not host.get_fact(Which, command="nginx")
+
+with host.when(nginx_not_installed):
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+    )
+```
+
+## Loop Helper
+
+Loop over iterables while tracking position:
+
+```python
+from pyinfra import host
+from pyinfra.operations import files
+
+for i, config in host.loop(["app1", "app2", "app3"]):
+    files.template(
+        name=f"Deploy config for {config}",
+        src="templates/app.conf.j2",
+        dest=f"/etc/{config}/config.conf",
+        app_name=config,
+    )
+```
+
+The loop position is used internally for operation ordering.
+
+## Temporary Files
+
+Generate temporary file paths:
+
+```python
+from pyinfra import host
+
+# Get temp directory
+temp_dir = host.get_temp_dir_config()
+
+# Generate unique temp filename
+temp_file = host.get_temp_filename(hash_key="my-upload")
+# Returns: /tmp/pyinfra-<hash>
+
+# Custom temp directory
+temp_file = host.get_temp_filename(
+    hash_key="my-file",
+    temp_directory="/var/tmp"
+)
+```
+
+## Complete Example
+
+Here's a comprehensive example using the Host API:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution, Which
+from pyinfra.facts.files import File, Directory
+from pyinfra.operations import apt, files, systemd
+
+def deploy_application():
+    """Deploy application based on host configuration."""
+    
+    # Log deployment start
+    host.log(f"Deploying to {host.name}")
+    
+    # Get host data
+    app_name = host.data.app_name
+    app_port = host.data.get("app_port", 8000)
+    
+    # Check distribution
+    distro = host.get_fact(LinuxDistribution)
+    host.log(f"Detected {distro['name']} {distro['version']}")
+    
+    if distro["name"] not in ["Ubuntu", "Debian"]:
+        host.log_styled(
+            "Unsupported distribution",
+            log_func=logger.error,
+            fg="red"
+        )
+        return
+    
+    # Check if app already installed
+    app_installed = host.get_fact(Which, command=app_name)
+    
+    if app_installed:
+        host.noop(f"{app_name} already installed")
+    else:
+        # Install application
+        apt.packages(
+            name=f"Install {app_name}",
+            packages=[app_name],
+            update=True,
+        )
+    
+    # Configure application
+    config_dir = f"/etc/{app_name}"
+    
+    if not host.get_fact(Directory, path=config_dir):
+        files.directory(
+            name=f"Create {app_name} config directory",
+            path=config_dir,
+        )
+    
+    files.template(
+        name=f"Deploy {app_name} config",
+        src=f"templates/{app_name}.conf.j2",
+        dest=f"{config_dir}/config.conf",
+        app_port=app_port,
+    )
+    
+    # Start service
+    systemd.service(
+        name=f"Start {app_name}",
+        service=app_name,
+        running=True,
+        enabled=True,
+    )
+    
+    host.log_styled(
+        "Deployment complete!",
+        fg="green",
+        bold=True
+    )
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/host.py:103`
+
+### Key Methods
+
+- `__init__()` - Initialize host (line 147)
+- `get_fact()` - Retrieve facts (line 366)
+- `connect()` - Connect to host (line 379)
+- `disconnect()` - Disconnect from host (line 417)
+- `run_shell_command()` - Execute commands (line 434)
+- `put_file()` - Upload files (line 441)
+- `get_file()` - Download files (line 449)
+- `loop()` - Loop helper (line 140)
+- `when()` - Conditional execution (line 247)

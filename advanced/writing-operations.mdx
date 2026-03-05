@@ -1,0 +1,416 @@
+---
+title: Writing Custom Operations
+description: Learn how to create custom operations in pyinfra
+---
+
+Operations are the core building blocks of pyinfra. They define the commands that will be executed on remote hosts to achieve desired system states. This guide will teach you how to write your own custom operations.
+
+## Understanding Operations
+
+Operations in pyinfra:
+- Are Python generator functions decorated with `@operation`
+- Yield shell commands to be executed on remote hosts
+- Can check current state using facts before generating commands
+- Support idempotency by only yielding commands when changes are needed
+- Return an `OperationMeta` object that tracks execution status
+
+## Basic Operation Structure
+
+Here's the anatomy of a simple operation:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation, StringCommand
+
+@operation()
+def ensure_package(package_name: str):
+    """
+    Ensure a package is installed.
+    
+    + package_name: name of the package to install
+    """
+    # Check current state using a fact
+    installed_packages = host.get_fact(InstalledPackages)
+    
+    # Only yield commands if change is needed
+    if package_name not in installed_packages:
+        yield StringCommand("apt-get", "install", "-y", package_name)
+    else:
+        host.noop(f"package {package_name} is already installed")
+```
+
+## The @operation Decorator
+
+The `@operation` decorator is defined in `src/pyinfra/api/operation.py:240` and accepts these parameters:
+
+```python
+@operation(
+    is_idempotent: bool = True,
+    idempotent_notice: Optional[str] = None,
+    is_deprecated: bool = False,
+    deprecated_for: Optional[str] = None,
+)
+```
+
+### Parameters
+
+- **`is_idempotent`**: Set to `True` (default) if the operation can be safely run multiple times without side effects
+- **`idempotent_notice`**: Custom message explaining idempotency behavior
+- **`is_deprecated`**: Mark the operation as deprecated
+- **`deprecated_for`**: Suggest an alternative operation
+
+### Example: Non-Idempotent Operation
+
+```python
+from pyinfra.api import operation, StringCommand
+
+@operation(is_idempotent=False)
+def reboot(delay: int = 10, interval: int = 1, reboot_timeout: int = 300):
+    """
+    Reboot the server and wait for reconnection.
+    
+    + delay: number of seconds to wait before attempting reconnect
+    + interval: interval (s) between reconnect attempts
+    + reboot_timeout: total time before giving up reconnecting
+    """
+    yield StringCommand("reboot", _success_exit_codes=[0, -1])
+```
+
+## Yielding Commands
+
+Operations yield commands that will be executed on the remote host. There are several command types:
+
+### StringCommand
+
+The most common command type for shell commands:
+
+```python
+from pyinfra.api import StringCommand, QuoteString
+
+# Simple command
+yield StringCommand("systemctl", "restart", "nginx")
+
+# Command with quoted arguments (handles spaces and special chars)
+yield StringCommand("echo", QuoteString("Hello, World!"), ">>", "/var/log/app.log")
+
+# Command with custom success codes
+yield StringCommand("reboot", _success_exit_codes=[0, -1])
+```
+
+### FileUploadCommand
+
+Upload files from the local machine:
+
+```python
+from pyinfra.api import FileUploadCommand
+from io import StringIO
+
+# Upload from file path
+yield FileUploadCommand(
+    src="/local/path/config.yml",
+    dest="/etc/app/config.yml"
+)
+
+# Upload from IO object
+config_content = StringIO("server:\n  port: 8080\n")
+yield FileUploadCommand(
+    src=config_content,
+    dest="/etc/app/config.yml"
+)
+```
+
+### FileDownloadCommand
+
+Download files from the remote host:
+
+```python
+from pyinfra.api import FileDownloadCommand
+
+yield FileDownloadCommand(
+    src="/var/log/app.log",
+    dest="./local-logs/app.log"
+)
+```
+
+### FunctionCommand
+
+Execute Python functions instead of shell commands:
+
+```python
+from pyinfra.api import FunctionCommand
+
+def cleanup_temp_files(state, host):
+    """Python function executed on the pyinfra controller."""
+    print(f"Cleaning up for {host.name}")
+    # Can access state and host objects
+    
+yield FunctionCommand(cleanup_temp_files, (), {})
+```
+
+## Using Facts
+
+Facts allow operations to query the current state of the remote host:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation
+from pyinfra.facts.files import File, Directory
+from pyinfra.facts.server import Hostname, User
+
+@operation()
+def configure_app(config_path: str):
+    """
+    Configure application based on host state.
+    """
+    # Get simple facts
+    hostname = host.get_fact(Hostname)
+    current_user = host.get_fact(User)
+    
+    # Get facts with arguments
+    config_exists = host.get_fact(File, path=config_path)
+    app_dir_exists = host.get_fact(Directory, path="/opt/app")
+    
+    if not app_dir_exists:
+        yield "mkdir -p /opt/app"
+    
+    if not config_exists:
+        yield f"echo 'hostname={hostname}' > {config_path}"
+```
+
+## Complete Example: Custom Package Operation
+
+Here's a full example based on the pattern in `src/pyinfra/operations/files.py:75`:
+
+```python
+from pyinfra import host, logger
+from pyinfra.api import operation, OperationError, StringCommand, QuoteString
+from pyinfra.facts.server import Which
+from pyinfra.facts.files import File
+
+@operation()
+def download(
+    src: str,
+    dest: str,
+    user: str | None = None,
+    group: str | None = None,
+    mode: str | None = None,
+    force: bool = False,
+    sha256sum: str | None = None,
+):
+    """
+    Download files from remote locations using curl or wget.
+    
+    + src: source URL of the file
+    + dest: where to save the file
+    + user: user to own the file
+    + group: group to own the file
+    + mode: permissions of the file
+    + force: always download the file, even if it already exists
+    + sha256sum: sha256 hash to checksum the downloaded file against
+    
+    **Example:**
+    
+    .. code:: python
+    
+        from pyinfra.operations import files
+        files.download(
+            name="Download config file",
+            src="https://example.com/config.yml",
+            dest="/etc/app/config.yml",
+            mode="644",
+        )
+    """
+    
+    info = host.get_fact(File, path=dest)
+    
+    # Destination is a directory?
+    if info is False:
+        raise OperationError(
+            f"Destination {dest} already exists and is not a file"
+        )
+    
+    # Determine if we need to download
+    download = force or info is None
+    
+    if sha256sum and info:
+        from pyinfra.facts.files import Sha256File
+        if sha256sum != host.get_fact(Sha256File, path=dest):
+            download = True
+    
+    if download:
+        temp_file = host.get_temp_filename(dest)
+        
+        # Try curl first, then wget
+        if host.get_fact(Which, command="curl"):
+            yield StringCommand(
+                "curl", "-sSLf", QuoteString(src), "-o", QuoteString(temp_file)
+            )
+        elif host.get_fact(Which, command="wget"):
+            yield StringCommand(
+                "wget", "-q", QuoteString(src), "-O", QuoteString(temp_file)
+            )
+        else:
+            raise OperationError("Neither curl nor wget is available")
+        
+        yield StringCommand("mv", QuoteString(temp_file), QuoteString(dest))
+        
+        if user or group:
+            from pyinfra.operations.util.files import chown
+            yield chown(dest, user, group)
+        
+        if mode:
+            from pyinfra.operations.util.files import chmod
+            yield chmod(dest, mode)
+        
+        if sha256sum:
+            yield (
+                f"(sha256sum {dest} | grep {sha256sum}) || "
+                f"(echo 'SHA256 did not match!' && exit 1)"
+            )
+    else:
+        host.noop(f"file {dest} has already been downloaded")
+```
+
+## Advanced Patterns
+
+### Conditional Commands
+
+Yield commands only when conditions are met:
+
+```python
+@operation()
+def conditional_restart(service: str, config_changed: bool):
+    """Restart service only if config changed."""
+    if config_changed:
+        yield f"systemctl restart {service}"
+    else:
+        host.noop(f"service {service} config unchanged, no restart needed")
+```
+
+### Nested Operations
+
+Call other operations from within your operation using the `_inner` function:
+
+```python
+from pyinfra.operations import files, server
+
+@operation()
+def deploy_app(version: str):
+    """Deploy application with specific version."""
+    # Use _inner to call operations within operations
+    for command in files.directory._inner(
+        path="/opt/app",
+        user="app",
+        group="app",
+        mode="755",
+    ):
+        yield command
+    
+    for command in files.download._inner(
+        src=f"https://releases.example.com/app-{version}.tar.gz",
+        dest="/tmp/app.tar.gz",
+    ):
+        yield command
+    
+    yield "tar -xzf /tmp/app.tar.gz -C /opt/app"
+    yield "rm /tmp/app.tar.gz"
+```
+
+### Error Handling
+
+Raise errors when prerequisites aren't met:
+
+```python
+from pyinfra.api import OperationError, OperationTypeError
+
+@operation()
+def install_with_validation(package: str, min_disk_gb: int = 10):
+    """Install package with disk space validation."""
+    if not isinstance(package, str):
+        raise OperationTypeError("package must be a string")
+    
+    # Check available disk space
+    from pyinfra.facts.server import Mounts
+    mounts = host.get_fact(Mounts)
+    root_mount = mounts.get("/")
+    
+    if root_mount:
+        available_gb = root_mount["available"] / (1024**3)
+        if available_gb < min_disk_gb:
+            raise OperationError(
+                f"Insufficient disk space: {available_gb:.1f}GB available, "
+                f"{min_disk_gb}GB required"
+            )
+    
+    yield f"apt-get install -y {package}"
+```
+
+## Operation Context
+
+Operations have access to the current execution context:
+
+```python
+from pyinfra import host, state, context
+
+@operation()
+def context_aware_operation():
+    """Access host and state information during operation."""
+    # Access current host
+    logger.info(f"Running on host: {host.name}")
+    logger.info(f"Host data: {host.data}")
+    
+    # Access deployment state
+    if state.is_executing:
+        logger.info("Currently executing operations")
+    
+    # Access current operation metadata
+    if host.current_op_hash:
+        logger.info(f"Operation hash: {host.current_op_hash}")
+    
+    yield "echo 'Context-aware operation'"
+```
+
+## Testing Operations
+
+When developing operations, test them thoroughly:
+
+```python
+# In your deploy script
+from pyinfra import host
+from pyinfra.operations import custom
+
+# Test with dry-run mode first
+# pyinfra inventory.py deploy.py --dry
+
+result = custom.my_operation(
+    name="Test my operation",
+    param1="value1",
+)
+
+# Check if operation would make changes
+if result.will_change:
+    print("Operation would make changes")
+
+# After execution, check results
+if result.did_succeed():
+    print(f"Operation succeeded")
+    print(f"Changed: {result.did_change()}")
+    print(f"Output: {result.stdout}")
+```
+
+## Best Practices
+
+1. **Check state before acting**: Always use facts to check current state before yielding commands
+2. **Use `host.noop()`**: Call `host.noop()` when no changes are needed to provide user feedback
+3. **Handle errors gracefully**: Raise `OperationError` with helpful messages when operations fail
+4. **Quote arguments**: Use `QuoteString` for user-provided values to prevent injection
+5. **Document parameters**: Use docstring parameter format (`+ param: description`)
+6. **Type hints**: Add type hints for better IDE support and documentation
+7. **Test idempotency**: Ensure operations can be run multiple times safely
+8. **Use string commands**: Prefer `StringCommand` over raw strings for better error handling
+
+## Next Steps
+
+- Learn about [Writing Facts](/advanced/writing-facts) to query system state
+- Explore [Writing Connectors](/advanced/writing-connectors) for custom host connections
+- See [API Reference](/api-reference) for complete API documentation

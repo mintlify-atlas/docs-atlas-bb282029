@@ -1,0 +1,343 @@
+---
+title: dnf Operations
+description: Manage dnf packages and repositories on Fedora/RHEL 8+ systems
+icon: fedora
+---
+
+The `dnf` module manages packages and repositories on Fedora and RHEL 8+ systems using the dnf package manager.
+
+<Note>
+  Dnf package names are **case-sensitive**.
+</Note>
+
+## Functions
+
+### packages
+
+Install, remove, or update dnf packages.
+
+```python
+from pyinfra.operations import dnf
+
+dnf.packages(
+    name="Install web server",
+    packages=["nginx", "certbot"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `dnf update` before installing packages.
+</ParamField>
+
+<ParamField path="clean" type="bool" default={false}>
+  Run `dnf clean` before installing packages.
+</ParamField>
+
+<ParamField path="nobest" type="bool" default={false}>
+  Add the --nobest option to install.
+</ParamField>
+
+<ParamField path="extra_install_args" type="str">
+  Additional arguments to the dnf install command.
+</ParamField>
+
+<ParamField path="extra_uninstall_args" type="str">
+  Additional arguments to the dnf uninstall command.
+</ParamField>
+
+<Note>
+  Package versions can be pinned as: `<pkg>=<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import dnf
+
+# Update package list and install packages
+dnf.packages(
+    name="Install Vim and Vim enhanced",
+    packages=["vim-enhanced", "vim"],
+    update=True,
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import dnf
+
+# Install the latest versions of packages (always check)
+dnf.packages(
+    name="Install latest Vim",
+    packages=["vim"],
+    latest=True,
+)
+```
+
+```python With Clean
+from pyinfra.operations import dnf
+
+# Clean cache before installing
+dnf.packages(
+    name="Install packages with fresh cache",
+    packages=["httpd", "mod_ssl"],
+    clean=True,
+)
+```
+</CodeGroup>
+
+---
+
+### update
+
+Update all dnf packages.
+
+```python
+from pyinfra.operations import dnf
+
+dnf.update(
+    name="Update all packages",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### repo
+
+Add, remove, or update dnf repositories.
+
+```python
+from pyinfra.operations import dnf
+
+dnf.repo(
+    name="Add Docker repository",
+    src="DockerCE",
+    baseurl="https://download.docker.com/linux/centos/7/$basearch/stable",
+)
+```
+
+<ParamField path="src" type="str" required>
+  URL or name for the `.repo` file.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the `.repo` file should be present.
+</ParamField>
+
+<ParamField path="baseurl" type="str">
+  The baseurl of the repo (if `src` is not a URL).
+</ParamField>
+
+<ParamField path="description" type="str">
+  Optional verbose description.
+</ParamField>
+
+<ParamField path="enabled" type="bool" default={true}>
+  Whether this repo is enabled.
+</ParamField>
+
+<ParamField path="gpgcheck" type="bool" default={true}>
+  Whether to set `gpgcheck=1`.
+</ParamField>
+
+<ParamField path="gpgkey" type="str">
+  The URL to the GPG key for this repo.
+</ParamField>
+
+<Note>
+  `baseurl`, `description`, `gpgcheck`, and `gpgkey` are only valid when `src` is a filename (not a URL). Use a URL to download and install remote repository files.
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python From URL
+from pyinfra.operations import dnf
+
+# Download a repository file
+dnf.repo(
+    name="Install Docker-CE repo via URL",
+    src="https://download.docker.com/linux/centos/docker-ce.repo",
+)
+```
+
+```python Manual Construction
+from pyinfra.operations import dnf
+
+# Create the repository file from baseurl/etc
+dnf.repo(
+    name="Add the Docker CentOS repo",
+    src="DockerCE",
+    baseurl="https://download.docker.com/linux/centos/7/$basearch/stable",
+)
+```
+</CodeGroup>
+
+---
+
+### rpm
+
+Install or remove .rpm package files.
+
+```python
+from pyinfra import host
+from pyinfra.operations import dnf
+from pyinfra.facts.server import LinuxDistribution
+
+major_centos_version = host.get_fact(LinuxDistribution)["major"]
+dnf.rpm(
+    name="Install EPEL rpm to enable EPEL repo",
+    src=f"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{major_centos_version}.noarch.rpm",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Filename or URL of the `.rpm` package.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the package should exist on the system.
+</ParamField>
+
+<Warning>
+  **URL sources with `present=False`**: If the `.rpm` file isn't downloaded, pyinfra can't remove any existing package as the file won't exist until mid-deploy.
+</Warning>
+
+---
+
+### key
+
+Add dnf GPG keys with rpm.
+
+```python
+from pyinfra import host
+from pyinfra.operations import dnf
+from pyinfra.facts.server import LinuxDistribution
+
+linux_id = host.get_fact(LinuxDistribution)["release_meta"].get("ID")
+dnf.key(
+    name="Add the Docker gpg key",
+    src=f"https://download.docker.com/linux/{linux_id}/gpg",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Filename or URL of the GPG key.
+</ParamField>
+
+<Warning>
+  This operation is **not idempotent** - it always returns one command without state checking.
+</Warning>
+
+## Common Use Cases
+
+### Install EPEL Repository
+
+```python
+from pyinfra import host
+from pyinfra.operations import dnf
+from pyinfra.facts.server import LinuxDistribution
+
+# Get the major version
+major_version = host.get_fact(LinuxDistribution)["major"]
+
+# Install EPEL release package
+dnf.rpm(
+    name="Install EPEL repository",
+    src=f"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{major_version}.noarch.rpm",
+)
+
+# Install packages from EPEL
+dnf.packages(
+    name="Install packages from EPEL",
+    packages=["htop", "ncdu"],
+)
+```
+
+### Install Docker on Fedora
+
+```python
+from pyinfra import host
+from pyinfra.operations import dnf
+from pyinfra.facts.server import LinuxDistribution
+
+linux_id = host.get_fact(LinuxDistribution)["release_meta"].get("ID")
+
+# Add Docker GPG key
+dnf.key(
+    name="Add Docker GPG key",
+    src=f"https://download.docker.com/linux/{linux_id}/gpg",
+)
+
+# Add Docker repository
+dnf.repo(
+    name="Add Docker repository",
+    src="https://download.docker.com/linux/fedora/docker-ce.repo",
+)
+
+# Install Docker
+dnf.packages(
+    name="Install Docker",
+    packages=["docker-ce", "docker-ce-cli", "containerd.io"],
+)
+```
+
+### System Upgrade
+
+```python
+from pyinfra.operations import dnf
+
+# Clean metadata
+dnf.packages(
+    name="Clean dnf cache",
+    packages=[],
+    clean=True,
+)
+
+# Update all packages
+dnf.update(
+    name="Update all packages",
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import dnf
+
+# Install development tools
+dnf.packages(
+    name="Install Development Tools group",
+    packages=["@development-tools"],
+)
+
+# Install additional tools
+dnf.packages(
+    name="Install development utilities",
+    packages=[
+        "git",
+        "vim",
+        "tmux",
+        "wget",
+        "curl",
+    ],
+    update=True,
+)
+```

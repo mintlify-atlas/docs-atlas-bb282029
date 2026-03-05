@@ -1,0 +1,205 @@
+---
+title: postgres
+description: Manage PostgreSQL databases, users and privileges
+---
+
+The PostgreSQL modules manage PostgreSQL databases, users and privileges.
+
+Requires the `psql` CLI executable on the target host(s).
+
+All operations in this module take five optional arguments:
+- `psql_user`: the username to connect to postgresql to
+- `psql_password`: the password for the connecting user
+- `psql_host`: the hostname of the server to connect to
+- `psql_port`: the port of the server to connect to
+- `psql_database`: the database on the server to connect to
+
+## Functions
+
+### `postgres.sql`
+
+Execute arbitrary SQL against PostgreSQL.
+
+```python
+postgres.sql(
+    sql,
+    psql_user=None,
+    psql_password=None,
+    psql_host=None,
+    psql_port=None,
+    psql_database=None,
+)
+```
+
+<ParamField name="sql" type="str" required>
+  SQL command(s) to execute
+</ParamField>
+
+### `postgres.role`
+
+Add/remove PostgreSQL roles.
+
+```python
+postgres.role(
+    role,
+    present=True,
+    password=None,
+    login=True,
+    superuser=False,
+    inherit=False,
+    createdb=False,
+    createrole=False,
+    replication=False,
+    connection_limit=None,
+    psql_user=None,
+    psql_password=None,
+    psql_host=None,
+    psql_port=None,
+    psql_database=None,
+)
+```
+
+<ParamField name="role" type="str" required>
+  Name of the role
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the role should be present or absent
+</ParamField>
+
+<ParamField name="password" type="str" default="None">
+  The password for the role
+</ParamField>
+
+<ParamField name="login" type="bool" default="True">
+  Whether the role can login
+</ParamField>
+
+<ParamField name="superuser" type="bool" default="False">
+  Whether role will be a superuser
+</ParamField>
+
+<ParamField name="createdb" type="bool" default="False">
+  Whether the role is allowed to create databases
+</ParamField>
+
+<ParamField name="createrole" type="bool" default="False">
+  Whether the role is allowed to create new roles
+</ParamField>
+
+<ParamField name="replication" type="bool" default="False">
+  Whether this role is allowed to replicate
+</ParamField>
+
+### `postgres.database`
+
+Add/remove PostgreSQL databases.
+
+```python
+postgres.database(
+    database,
+    present=True,
+    owner=None,
+    template=None,
+    encoding=None,
+    lc_collate=None,
+    lc_ctype=None,
+    tablespace=None,
+    connection_limit=None,
+    psql_user=None,
+    psql_password=None,
+    psql_host=None,
+    psql_port=None,
+    psql_database=None,
+)
+```
+
+<ParamField name="database" type="str" required>
+  Name of the database
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the database should exist or not
+</ParamField>
+
+<ParamField name="owner" type="str" default="None">
+  The PostgreSQL role that owns the database
+</ParamField>
+
+<ParamField name="template" type="str" default="None">
+  Name of the PostgreSQL template to use
+</ParamField>
+
+<ParamField name="encoding" type="str" default="None">
+  Encoding of the database
+</ParamField>
+
+### `postgres.dump`
+
+Dump a PostgreSQL database into a `.sql` file. Requires `pg_dump`.
+
+```python
+postgres.dump(
+    dest,
+    psql_user=None,
+    psql_password=None,
+    psql_host=None,
+    psql_port=None,
+    psql_database=None,
+)
+```
+
+<ParamField name="dest" type="str" required>
+  Name of the file to dump the SQL to
+</ParamField>
+
+### `postgres.load`
+
+Load `.sql` file into a database.
+
+```python
+postgres.load(
+    src,
+    psql_user=None,
+    psql_password=None,
+    psql_host=None,
+    psql_port=None,
+    psql_database=None,
+)
+```
+
+<ParamField name="src" type="str" required>
+  The filename to read from
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import postgres
+
+# Create a PostgreSQL role
+postgres.role(
+    name="Create the pyinfra PostgreSQL role",
+    role="pyinfra",
+    password="somepassword",
+    superuser=True,
+    login=True,
+    _sudo_user="postgres",
+)
+
+# Create a database
+postgres.database(
+    name="Create the pyinfra_stuff database",
+    database="pyinfra_stuff",
+    owner="pyinfra",
+    encoding="UTF8",
+    _sudo_user="postgres",
+)
+
+# Dump a database
+postgres.dump(
+    name="Dump the pyinfra_stuff database",
+    dest="/tmp/pyinfra_stuff.dump",
+    _sudo_user="postgres",
+)
+```

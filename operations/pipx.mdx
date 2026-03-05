@@ -1,0 +1,342 @@
+---
+title: pipx Operations
+description: Manage Python applications with pipx
+icon: python
+---
+
+The `pipx` module manages Python applications in isolated environments using pipx.
+
+<Note>
+  pipx is designed for installing Python applications, not libraries. Each application is installed in its own isolated environment.
+</Note>
+
+## Functions
+
+### packages
+
+Install, remove, or update pipx packages.
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Install Python tools",
+    packages=["black", "flake8"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages (PEP-508 format) to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="extra_args" type="str">
+  Additional arguments to the pipx command.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like pip: `<pkg>==<version>`
+</Note>
+
+<Note>
+  pipx supports only one package name at a time, but the operation handles lists automatically.
+</Note>
+
+#### Example
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Install Python tools",
+    packages=["pyinfra"],
+)
+```
+
+---
+
+### upgrade_all
+
+Upgrade all pipx packages.
+
+```python
+from pyinfra.operations import pipx
+
+pipx.upgrade_all(
+    name="Upgrade all pipx packages",
+)
+```
+
+---
+
+### ensure_path
+
+Ensure pipx bin directory is in the PATH.
+
+```python
+from pyinfra.operations import pipx
+
+pipx.ensure_path(
+    name="Ensure pipx is in PATH",
+)
+```
+
+<Note>
+  This operation checks if the pipx bin directory is already in PATH before making changes.
+</Note>
+
+## Common Use Cases
+
+### Install Development Tools
+
+```python
+from pyinfra.operations import pipx
+
+# Ensure pipx is in PATH
+pipx.ensure_path(
+    name="Add pipx to PATH",
+)
+
+# Install development tools
+pipx.packages(
+    name="Install Python development tools",
+    packages=[
+        "black",
+        "flake8",
+        "mypy",
+        "pytest",
+        "poetry",
+    ],
+)
+```
+
+### Install with Specific Versions
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Install specific versions",
+    packages=[
+        "black==23.3.0",
+        "ruff==0.0.270",
+    ],
+)
+```
+
+### Keep Tools Updated
+
+```python
+from pyinfra.operations import pipx
+
+# Upgrade all installed tools
+pipx.upgrade_all(
+    name="Upgrade all Python tools",
+)
+
+# Or upgrade specific tools
+pipx.packages(
+    name="Upgrade specific tools",
+    packages=["pyinfra", "black"],
+    latest=True,
+)
+```
+
+### Install pyinfra Itself
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Install pyinfra via pipx",
+    packages=["pyinfra"],
+)
+```
+
+### Install with Extras
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Install with extras",
+    packages=["httpie[socks]"],
+)
+```
+
+### Remove Tools
+
+```python
+from pyinfra.operations import pipx
+
+pipx.packages(
+    name="Remove outdated tools",
+    packages=["old-tool"],
+    present=False,
+)
+```
+
+## pipx-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="pipx vs pip">
+    **When to use pipx:**
+    - Installing command-line tools (black, flake8, poetry, etc.)
+    - Applications that should be isolated from other Python environments
+    - Tools you want available system-wide
+    
+    **When to use pip:**
+    - Installing libraries for development
+    - Project dependencies in a virtualenv
+    - Packages that don't provide CLI tools
+    
+    ```python
+    from pyinfra.operations import pip, pipx
+    
+    # Use pipx for tools
+    pipx.packages(
+        name="Install CLI tools",
+        packages=["black", "pyinfra"],
+    )
+    
+    # Use pip for libraries
+    pip.packages(
+        name="Install project dependencies",
+        packages=["django", "requests"],
+        virtualenv="/app/venv",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Injecting Packages">
+    Add packages to existing pipx environments:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Install a package with additional dependencies
+    server.shell(
+        name="Inject package into pipx environment",
+        commands=[
+            "pipx inject pyinfra ansible",
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Running Applications">
+    Run applications without installing:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Run a tool temporarily
+    server.shell(
+        name="Run tool with pipx",
+        commands=[
+            "pipx run black --check .",
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="List Installed Packages">
+    View installed pipx packages:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="List pipx packages",
+        commands=["pipx list"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Reinstall Packages">
+    Reinstall packages to fix issues:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Reinstall pipx package",
+        commands=["pipx reinstall black"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use for Global Tools Only">
+    ```python
+    from pyinfra.operations import pipx
+    
+    # Good: Installing system-wide tools
+    pipx.packages(
+        name="Install system tools",
+        packages=[
+            "poetry",      # Project management
+            "black",       # Code formatter
+            "ruff",        # Fast linter
+            "pyinfra",     # Infrastructure management
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Keep Tools Updated">
+    ```python
+    from pyinfra.operations import pipx
+    
+    # Regular maintenance
+    pipx.upgrade_all(
+        name="Upgrade all pipx packages monthly",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Ensure PATH Configuration">
+    ```python
+    from pyinfra.operations import pipx
+    
+    # Always ensure PATH is configured
+    pipx.ensure_path(
+        name="Configure pipx PATH",
+    )
+    
+    # Then install packages
+    pipx.packages(
+        name="Install tools",
+        packages=["black"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Note>
+  Package names are compared using lowercase as per PEP-0426.
+</Note>
+
+<Note>
+  pipx requires Python 3.6+ to be installed on the system.
+</Note>
+
+<Warning>
+  The `ensure_path` operation modifies the user's shell configuration files. It should be run before installing packages.
+</Warning>
+
+<Tip>
+  Use `pipx run` for one-off executions without installing the package permanently.
+</Tip>

@@ -1,0 +1,159 @@
+---
+title: ssh
+description: Execute commands and transfer files via SSH
+---
+
+Execute commands and up/download files *from* the remote host.
+
+Eg: `pyinfra -> inventory-host.net <-> another-host.net`
+
+## Functions
+
+### `ssh.keyscan`
+
+Check/add hosts to the `~/.ssh/known_hosts` file.
+
+```python
+ssh.keyscan(
+    hostname,
+    force=False,
+    port=22,
+)
+```
+
+<ParamField name="hostname" type="str" required>
+  Hostname that should have a key in known_hosts
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  If the key already exists, remove and rescan
+</ParamField>
+
+<ParamField name="port" type="int" default="22">
+  Port to scan
+</ParamField>
+
+### `ssh.command`
+
+Execute commands on other servers over SSH.
+
+```python
+ssh.command(
+    hostname,
+    command,
+    user=None,
+    port=22,
+)
+```
+
+<ParamField name="hostname" type="str" required>
+  The hostname to connect to
+</ParamField>
+
+<ParamField name="command" type="str" required>
+  The command to execute
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  Connect with this user
+</ParamField>
+
+<ParamField name="port" type="int" default="22">
+  Connect to this port
+</ParamField>
+
+### `ssh.upload`
+
+Upload files to other servers using `scp`.
+
+```python
+ssh.upload(
+    hostname,
+    filename,
+    remote_filename=None,
+    port=22,
+    user=None,
+    use_remote_sudo=False,
+    ssh_keyscan=False,
+)
+```
+
+<ParamField name="hostname" type="str" required>
+  Hostname to upload to
+</ParamField>
+
+<ParamField name="filename" type="str" required>
+  File to upload
+</ParamField>
+
+<ParamField name="remote_filename" type="str" default="None">
+  Where to upload the file to (defaults to filename)
+</ParamField>
+
+<ParamField name="use_remote_sudo" type="bool" default="False">
+  Upload to a temporary location and move using sudo
+</ParamField>
+
+<ParamField name="ssh_keyscan" type="bool" default="False">
+  Execute `ssh.keyscan` before uploading the file
+</ParamField>
+
+### `ssh.download`
+
+Download files from other servers using `scp`.
+
+```python
+ssh.download(
+    hostname,
+    filename,
+    local_filename=None,
+    force=False,
+    port=22,
+    user=None,
+    ssh_keyscan=False,
+)
+```
+
+<ParamField name="hostname" type="str" required>
+  Hostname to download from
+</ParamField>
+
+<ParamField name="filename" type="str" required>
+  File to download
+</ParamField>
+
+<ParamField name="local_filename" type="str" default="None">
+  Where to download the file to (defaults to filename)
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Always download the file, even if present locally
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import ssh
+
+# Add a host to known_hosts
+ssh.keyscan(
+    name="Set add server two to known_hosts on one",
+    hostname="two.example.com",
+)
+
+# Execute a command on another server
+ssh.command(
+    name="Create file by running echo from host one to host two",
+    hostname="two.example.com",
+    command="echo 'one was here' > /tmp/one.txt",
+    user="vagrant",
+)
+
+# Upload a file to another server
+ssh.upload(
+    name="Upload file to another server",
+    hostname="two.example.com",
+    filename="/tmp/myfile.txt",
+    remote_filename="/tmp/remote_file.txt",
+)
+```

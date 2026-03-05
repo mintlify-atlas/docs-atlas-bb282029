@@ -1,0 +1,317 @@
+---
+title: Operation
+description: Create custom operations with the @operation decorator
+---
+
+Operations are the core of pyinfra. The `@operation` decorator intercepts function calls and generates commands to execute on remote servers, rather than executing directly.
+
+## @operation Decorator
+
+The `@operation` decorator converts a Python function into a pyinfra operation that generates commands.
+
+```python
+from pyinfra.api import operation
+
+@operation()
+def install_package(package: str):
+    """Install a package using apt."""
+    yield f"apt-get install -y {package}"
+```
+
+### Parameters
+
+<ParamField path="is_idempotent" type="bool" default={true}>
+  Whether the operation is idempotent (can be run multiple times safely).
+</ParamField>
+
+<ParamField path="idempotent_notice" type="str" optional>
+  Custom message to display about idempotency.
+</ParamField>
+
+<ParamField path="is_deprecated" type="bool" default={false}>
+  Mark the operation as deprecated.
+</ParamField>
+
+<ParamField path="deprecated_for" type="str" optional>
+  Suggest an alternative operation to use instead.
+</ParamField>
+
+## Operation Functions
+
+Operation functions are generators that yield commands:
+
+```python
+from pyinfra.api import operation
+
+@operation()
+def create_user_with_key(username: str, ssh_key: str):
+    """Create a user and add their SSH key."""
+    # Create user
+    yield f"useradd -m {username}"
+    
+    # Create .ssh directory
+    yield f"mkdir -p /home/{username}/.ssh"
+    
+    # Add SSH key
+    yield f'echo "{ssh_key}" > /home/{username}/.ssh/authorized_keys'
+    
+    # Set permissions
+    yield f"chmod 700 /home/{username}/.ssh"
+    yield f"chmod 600 /home/{username}/.ssh/authorized_keys"
+    yield f"chown -R {username}:{username} /home/{username}/.ssh"
+```
+
+### Command Types
+
+Operations can yield several types of commands:
+
+#### String Commands
+
+```python
+@operation()
+def simple_command():
+    yield "echo 'Hello World'"
+```
+
+#### StringCommand Objects
+
+```python
+from pyinfra.api import StringCommand, QuoteString
+
+@operation()
+def safe_command(user_input: str):
+    # Automatically quotes and escapes user input
+    yield StringCommand("echo", QuoteString(user_input))
+```
+
+#### File Operations
+
+```python
+from pyinfra.api import FileUploadCommand
+
+@operation()
+def upload_config():
+    yield FileUploadCommand(
+        src="local/config.txt",
+        dest="/etc/app/config.txt",
+    )
+```
+
+#### Python Functions
+
+```python
+from pyinfra.api import FunctionCommand
+
+def my_callback():
+    print("This runs on the host")
+
+@operation()
+def with_callback():
+    yield "echo 'Before callback'"
+    yield FunctionCommand(my_callback, (), {})
+    yield "echo 'After callback'"
+```
+
+## OperationMeta Class
+
+When you call an operation, it returns an `OperationMeta` object that tracks the operation's state:
+
+```python
+from pyinfra.operations import apt
+
+# Returns OperationMeta
+op = apt.packages(name="Install nginx", packages=["nginx"])
+
+# Check if operation will make changes
+if op.will_change:
+    print("This operation will modify the system")
+```
+
+### Properties
+
+<ResponseField name="executed" type="bool">
+  Whether the operation has executed and ran commands.
+</ResponseField>
+
+<ResponseField name="will_change" type="bool">
+  Whether the operation will make changes (checked during prepare phase).
+</ResponseField>
+
+<ResponseField name="stdout_lines" type="list[str]">
+  List of stdout lines from executed commands.
+</ResponseField>
+
+<ResponseField name="stderr_lines" type="list[str]">
+  List of stderr lines from executed commands.
+</ResponseField>
+
+<ResponseField name="stdout" type="str">
+  Combined stdout from all commands.
+</ResponseField>
+
+<ResponseField name="stderr" type="str">
+  Combined stderr from all commands.
+</ResponseField>
+
+<ResponseField name="retry_attempts" type="int">
+  Number of retry attempts made.
+</ResponseField>
+
+<ResponseField name="was_retried" type="bool">
+  Whether the operation was retried.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="did_succeed()" type="bool">
+  Returns `True` if the operation completed successfully.
+</ResponseField>
+
+<ResponseField name="did_change()" type="bool">
+  Returns `True` if the operation made changes.
+</ResponseField>
+
+<ResponseField name="did_not_change()" type="bool">
+  Returns `True` if the operation did not make changes.
+</ResponseField>
+
+<ResponseField name="did_error()" type="bool">
+  Returns `True` if the operation failed.
+</ResponseField>
+
+<ResponseField name="get_retry_info()" type="dict">
+  Returns dictionary with retry information.
+</ResponseField>
+
+## add_op Function
+
+`add_op()` programmatically adds an operation to the state. This should only be used in API mode.
+
+```python
+from pyinfra.api import add_op
+
+def add_op(
+    state: State,
+    op_func: Callable,
+    *args,
+    **kwargs
+) -> dict[Host, OperationMeta]:
+    """Add an operation to state.
+    
+    Args:
+        state: The deploy state
+        op_func: The operation function
+        args/kwargs: Passed to the operation
+        
+    Returns:
+        Dictionary mapping hosts to OperationMeta objects
+    """
+```
+
+### Example
+
+```python
+from pyinfra import Config, Inventory, State
+from pyinfra.api import add_op
+from pyinfra.operations import server
+
+# Create state
+inventory = Inventory((["host1", "host2"], {}))
+state = State(inventory, Config())
+state.init(inventory, Config())
+
+# Add operation to all hosts
+results = add_op(
+    state,
+    server.shell,
+    commands=["echo 'Hello'"],
+)
+
+# Check results per host
+for host, op_meta in results.items():
+    print(f"{host}: will_change={op_meta.will_change}")
+
+# Add operation to specific host
+host = inventory.get_host("host1")
+add_op(
+    state,
+    server.shell,
+    commands=["echo 'Hello host1'"],
+    host=host,
+)
+```
+
+## Conditional Operations
+
+Use facts to make operations conditional:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution
+
+@operation()
+def install_package_for_distro(package: str):
+    distro = host.get_fact(LinuxDistribution)
+    
+    if distro["name"] == "Ubuntu":
+        yield f"apt-get install -y {package}"
+    elif distro["name"] == "CentOS":
+        yield f"yum install -y {package}"
+```
+
+## Complete Example
+
+Here's a complete custom operation:
+
+```python
+# operations/custom.py
+from pyinfra import host
+from pyinfra.api import operation, StringCommand, QuoteString
+from pyinfra.facts.files import File
+
+@operation(is_idempotent=True)
+def configure_app(config_file: str, key: str, value: str):
+    """Set a configuration key in an app config file.
+    
+    Args:
+        config_file: Path to config file
+        key: Configuration key
+        value: Configuration value
+    """
+    # Check if config file exists
+    file_info = host.get_fact(File, path=config_file)
+    
+    if not file_info:
+        # Create config file
+        yield f"touch {config_file}"
+    
+    # Update configuration
+    # Use QuoteString to safely handle special characters
+    yield StringCommand(
+        "sed", "-i",
+        f"s/^{key}=.*/{key}={value}/",
+        QuoteString(config_file)
+    )
+    
+    # Restart app if config changed
+    yield "systemctl restart myapp"
+
+# Usage
+configure_app(
+    config_file="/etc/myapp/config.ini",
+    key="port",
+    value="8080",
+    _sudo=True,
+)
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/operation.py:240`
+
+### Key Classes & Functions
+
+- `operation()` - Decorator to create operations (line 240)
+- `OperationMeta` - Tracks operation state (line 43)
+- `add_op()` - Add operation to state (line 206)
+- `_wrap_operation()` - Internal operation wrapper (line 263)

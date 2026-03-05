@@ -1,0 +1,252 @@
+---
+title: Deploy
+description: Create reusable deployment functions with the @deploy decorator
+---
+
+The `@deploy` decorator enables you to create reusable deployment functions that can be used across CLI and API-based execution. This allows you to build pyinfra extensions and share common deployment patterns.
+
+## @deploy Decorator
+
+The `@deploy` decorator wraps a function and makes it a reusable deployment that can be called multiple times with different parameters.
+
+```python
+from pyinfra.api import deploy
+
+@deploy("Install and configure nginx")
+def install_nginx(version: str = "latest"):
+    apt.packages(
+        name="Install nginx",
+        packages=[f"nginx={version}" if version != "latest" else "nginx"],
+        update=True,
+    )
+    
+    files.directory(
+        name="Create web root",
+        path="/var/www/html",
+        present=True,
+    )
+```
+
+### Parameters
+
+<ParamField path="name" type="str" optional>
+  Name for the deploy. If not provided, the function name is used.
+</ParamField>
+
+<ParamField path="data_defaults" type="dict" optional>
+  Default data values available to operations within the deploy.
+</ParamField>
+
+## Using Deploys
+
+Deploys can be called like regular functions:
+
+```python
+# In a deploy file or script
+install_nginx(version="1.18.0")
+```
+
+In API mode, use `add_deploy()`:
+
+```python
+from pyinfra.api import State, add_deploy
+
+add_deploy(
+    state,
+    install_nginx,
+    version="1.18.0",
+)
+```
+
+## Deploy Context
+
+Deploys create a context that wraps all operations called within them. This context:
+
+- Groups operations for better organization
+- Applies deploy-wide arguments to all operations
+- Provides access to deploy data
+
+### Deploy Data
+
+Deploys can define default data that operations can access:
+
+```python
+@deploy(
+    "Configure application",
+    data_defaults={"app_port": 8000, "app_name": "myapp"},
+)
+def configure_app():
+    # Access deploy data via host.data
+    files.template(
+        name="Configure app",
+        src="app.conf.j2",
+        dest="/etc/app.conf",
+        app_port=host.data.app_port,
+        app_name=host.data.app_name,
+    )
+```
+
+## add_deploy Function
+
+`add_deploy()` programmatically adds a deploy to the state. This should only be used in API mode.
+
+```python
+from pyinfra.api import add_deploy
+
+def add_deploy(
+    state: State,
+    deploy_func: Callable,
+    *args,
+    **kwargs
+) -> None:
+    """Add a deploy to state by executing it on all hosts.
+    
+    Args:
+        state: The deploy state
+        deploy_func: The deploy function
+        args/kwargs: Passed to the deploy function
+    """
+```
+
+### Example
+
+```python
+from pyinfra import Config, Inventory, State
+from pyinfra.api import add_deploy
+
+# Create state
+inventory = Inventory((["host1", "host2"], {}))
+state = State(inventory, Config())
+state.init(inventory, Config())
+
+# Add deploy to all hosts
+add_deploy(state, install_nginx, version="1.18.0")
+
+# Add deploy to specific host
+host = inventory.get_host("host1")
+add_deploy(state, install_nginx, version="1.18.0", host=host)
+```
+
+## Nested Deploys
+
+Deploys can call other deploys, creating a hierarchy:
+
+```python
+@deploy("Install web stack")
+def install_web_stack():
+    install_nginx()
+    install_php()
+    install_mysql()
+```
+
+Nested deploy names are combined: `Install web stack | Install nginx`
+
+## Deploy Arguments
+
+Deploys accept the same global arguments as operations:
+
+```python
+install_nginx(
+    version="1.18.0",
+    _sudo=True,
+    _serial=True,
+)
+```
+
+## Error Handling
+
+<Warning>
+The `@deploy` decorator must be called with parentheses, even if you're not passing any arguments:
+
+```python
+# Correct
+@deploy()
+def my_deploy():
+    pass
+
+# Incorrect - will raise PyinfraError
+@deploy
+def my_deploy():
+    pass
+```
+</Warning>
+
+## Complete Example
+
+Here's a complete example showing deploy creation and usage:
+
+```python
+# deploys/webserver.py
+from pyinfra.api import deploy
+from pyinfra.operations import apt, files, systemd
+
+@deploy(
+    "Install and configure web server",
+    data_defaults={
+        "web_port": 80,
+        "web_root": "/var/www/html",
+    },
+)
+def install_webserver(domain: str):
+    """Install and configure nginx for a domain."""
+    
+    # Install nginx
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        update=True,
+    )
+    
+    # Create web root
+    files.directory(
+        name="Create web root",
+        path=host.data.web_root,
+        present=True,
+        user="www-data",
+        group="www-data",
+    )
+    
+    # Configure nginx
+    files.template(
+        name="Configure nginx site",
+        src="templates/nginx-site.conf.j2",
+        dest=f"/etc/nginx/sites-available/{domain}",
+        domain=domain,
+        port=host.data.web_port,
+        root=host.data.web_root,
+    )
+    
+    # Enable site
+    files.link(
+        name="Enable nginx site",
+        path=f"/etc/nginx/sites-enabled/{domain}",
+        target=f"/etc/nginx/sites-available/{domain}",
+    )
+    
+    # Restart nginx
+    systemd.service(
+        name="Restart nginx",
+        service="nginx",
+        restarted=True,
+    )
+
+# Usage in deploy.py
+install_webserver(domain="example.com")
+
+# Override defaults
+install_webserver(
+    domain="api.example.com",
+    _sudo=True,
+    _data={"web_port": 8080},
+)
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/deploy.py:57`
+
+### Key Functions
+
+- `deploy()` - Decorator to create deploy functions
+- `add_deploy()` - Add deploy to state (API mode only)
+- `_wrap_deploy()` - Internal function that wraps deploy logic

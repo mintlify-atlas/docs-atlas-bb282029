@@ -1,0 +1,371 @@
+---
+title: Inventory
+description: Represents a collection of target hosts with groups and data
+---
+
+The `Inventory` class represents a collection of target hosts and provides access to groups, host data, and inventory-wide configuration.
+
+## Creating an Inventory
+
+Create an inventory with hosts and optional groups:
+
+```python
+from pyinfra import Inventory
+
+# Simple inventory with host list
+inventory = Inventory(
+    (["web1.example.com", "web2.example.com"], {})
+)
+
+# Inventory with host data
+inventory = Inventory(
+    ([
+        ("web1.example.com", {"ssh_user": "ubuntu"}),
+        ("web2.example.com", {"ssh_user": "admin"}),
+    ], {})
+)
+
+# Inventory with groups
+inventory = Inventory(
+    (["web1", "web2", "db1"], {}),
+    webservers=(["web1", "web2"], {"app_port": 80}),
+    databases=(["db1"], {"db_port": 5432}),
+)
+```
+
+## Constructor
+
+```python
+def __init__(
+    self,
+    names_data: tuple[list, dict],
+    override_data: dict = None,
+    **groups: dict[str, tuple[list, dict]]
+):
+    """Create an inventory.
+    
+    Args:
+        names_data: Tuple of (host_names, global_data)
+        override_data: Data that overrides all other data
+        **groups: Named groups with (host_names, group_data) tuples
+    """
+```
+
+<ParamField path="names_data" type="tuple[list, dict]" required>
+  Tuple containing list of host names/tuples and global data dictionary.
+</ParamField>
+
+<ParamField path="override_data" type="dict" optional>
+  Dictionary of data that overrides all other data sources.
+</ParamField>
+
+<ParamField path="**groups" type="dict" optional>
+  Named groups, each containing a tuple of (host_names, group_data).
+</ParamField>
+
+## Properties
+
+<ResponseField name="hosts" type="dict[str, Host]">
+  Dictionary mapping host names to Host objects.
+</ResponseField>
+
+<ResponseField name="groups" type="dict[str, list[Host]]">
+  Dictionary mapping group names to lists of Host objects.
+</ResponseField>
+
+<ResponseField name="data" type="dict">
+  Global inventory data available to all hosts.
+</ResponseField>
+
+<ResponseField name="override_data" type="dict">
+  Override data that takes precedence over all other data.
+</ResponseField>
+
+<ResponseField name="host_data" type="dict[str, dict]">
+  Dictionary mapping host names to their host-specific data.
+</ResponseField>
+
+<ResponseField name="group_data" type="dict[str, dict]">
+  Dictionary mapping group names to their group-specific data.
+</ResponseField>
+
+<ResponseField name="state" type="State">
+  Reference to the State object (set after initialization).
+</ResponseField>
+
+## Iteration
+
+### Iterate Over All Hosts
+
+```python
+inventory = Inventory((["host1", "host2", "host3"], {}))
+
+# Iterate
+for host in inventory:
+    print(host.name)
+
+# Get count
+print(f"Total hosts: {len(inventory)}")
+```
+
+### Iterate Over Active Hosts
+
+```python
+# Get active hosts (not failed)
+active_hosts = inventory.get_active_hosts()
+for host in active_hosts:
+    print(f"Active: {host.name}")
+
+print(f"Active count: {inventory.len_active_hosts()}")
+```
+
+### Iterate Over Activated Hosts
+
+```python
+# Get all activated hosts (includes failed)
+for host in inventory.iter_activated_hosts():
+    print(f"Activated: {host.name}")
+
+print(f"Activated count: {inventory.len_activated_hosts()}")
+```
+
+## Getting Hosts
+
+### Get Specific Host
+
+```python
+from pyinfra.api.exceptions import NoHostError
+
+# Get host by name
+host = inventory.get_host("web1")
+
+# Get with default value
+host = inventory.get_host("missing", default=None)
+
+# Raises NoHostError if not found
+try:
+    host = inventory.get_host("missing")
+except NoHostError:
+    print("Host not found")
+```
+
+### Get Group
+
+```python
+from pyinfra.api.exceptions import NoGroupError
+
+# Get list of hosts in group
+web_hosts = inventory.get_group("webservers")
+for host in web_hosts:
+    print(host.name)
+
+# Get with default
+api_hosts = inventory.get_group("api", default=[])
+
+# Raises NoGroupError if not found
+try:
+    hosts = inventory.get_group("missing")
+except NoGroupError:
+    print("Group not found")
+```
+
+## Data Access
+
+### Get Global Data
+
+```python
+# Get all global inventory data
+global_data = inventory.get_data()
+print(global_data.get("environment"))
+```
+
+### Get Override Data
+
+```python
+# Get override data
+overrides = inventory.get_override_data()
+```
+
+### Get Host Data
+
+```python
+# Get data for specific host
+host_data = inventory.get_host_data("web1")
+print(host_data.get("ssh_user"))
+```
+
+### Get Group Data
+
+```python
+# Get data for specific group
+group_data = inventory.get_group_data("webservers")
+print(group_data.get("app_port"))
+```
+
+### Get Aggregated Group Data
+
+```python
+# Get combined data from multiple groups
+host = inventory.get_host("web1")
+groups_data = inventory.get_groups_data(host.groups)
+# Returns combined data from all groups the host belongs to
+```
+
+## Connectors
+
+Inventories can use different connectors for different hosts:
+
+```python
+from pyinfra import Inventory
+
+# Mix SSH and Docker hosts
+inventory = Inventory((
+    [
+        "server1.example.com",  # SSH by default
+        "@docker/ubuntu:22.04",  # Docker connector
+        "@local",  # Local connector
+    ],
+    {}
+))
+```
+
+## Groups Example
+
+Create an inventory with multiple groups:
+
+```python
+from pyinfra import Inventory
+
+inventory = Inventory(
+    # All hosts with global data
+    ([
+        "web1.example.com",
+        "web2.example.com",
+        "db1.example.com",
+        "cache1.example.com",
+    ], {
+        "ssh_user": "deploy",
+        "environment": "production",
+    }),
+    
+    # Webserver group
+    webservers=([
+        "web1.example.com",
+        "web2.example.com",
+    ], {
+        "app_port": 8000,
+        "workers": 4,
+    }),
+    
+    # Database group
+    databases=([
+        "db1.example.com",
+    ], {
+        "db_port": 5432,
+        "max_connections": 100,
+    }),
+    
+    # Cache group
+    cache=([
+        "cache1.example.com",
+    ], {
+        "cache_size": "1g",
+    }),
+)
+
+# Access groups
+web_hosts = inventory.get_group("webservers")
+for host in web_hosts:
+    print(f"{host.name}: port={host.data.app_port}")
+```
+
+## Empty Inventory
+
+Create an empty inventory:
+
+```python
+from pyinfra import Inventory
+
+# Empty inventory
+inventory = Inventory.empty()
+```
+
+## Complete Example
+
+Here's a complete example showing inventory creation and usage:
+
+```python
+from pyinfra import Inventory, Config, State
+from pyinfra.operations import apt, files
+
+# Create inventory with groups and data
+inventory = Inventory(
+    # All hosts
+    ([
+        ("web1.example.com", {"ssh_user": "ubuntu"}),
+        ("web2.example.com", {"ssh_user": "ubuntu"}),
+        ("db1.example.com", {"ssh_user": "admin"}),
+    ], {
+        # Global data
+        "environment": "production",
+        "ssh_port": 22,
+    }),
+    
+    # Groups
+    webservers=([
+        "web1.example.com",
+        "web2.example.com",
+    ], {
+        "app_port": 8000,
+        "app_name": "myapp",
+    }),
+    
+    databases=([
+        "db1.example.com",
+    ], {
+        "db_port": 5432,
+    }),
+)
+
+# Initialize state
+config = Config(SUDO=True)
+state = State(inventory, config)
+state.init(inventory, config)
+
+# Connect to all hosts
+for host in inventory:
+    host.connect()
+    print(f"Connected to {host.name}")
+
+# Deploy to webservers group
+web_hosts = inventory.get_group("webservers")
+for host in web_hosts:
+    print(f"Deploying to {host.name}")
+    print(f"  App: {host.data.app_name} on port {host.data.app_port}")
+    print(f"  Environment: {host.data.environment}")
+
+# Check inventory stats
+print(f"\nInventory stats:")
+print(f"  Total hosts: {len(inventory)}")
+print(f"  Active hosts: {inventory.len_active_hosts()}")
+print(f"  Groups: {list(inventory.groups.keys())}")
+
+# Get host by name
+web1 = inventory.get_host("web1.example.com")
+print(f"\nHost {web1.name} is in groups: {web1.groups}")
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/inventory.py:25`
+
+### Key Methods
+
+- `__init__()` - Initialize inventory (line 45)
+- `make_hosts_and_groups()` - Create hosts and groups (line 60)
+- `get_host()` - Get host by name (line 185)
+- `get_group()` - Get group by name (line 199)
+- `get_data()` - Get global data (line 213)
+- `get_host_data()` - Get host-specific data (line 227)
+- `get_group_data()` - Get group data (line 234)
+- `get_groups_data()` - Get aggregated group data (line 241)

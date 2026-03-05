@@ -1,0 +1,332 @@
+---
+title: Getting Started Tutorial
+description: A comprehensive guide to getting started with pyinfra, from installation to your first deploy
+---
+
+pyinfra is a powerful infrastructure automation tool that turns Python code into shell commands and runs them on your servers. This tutorial will guide you through installing pyinfra and creating your first deploy.
+
+## What You'll Learn
+
+By the end of this tutorial, you'll be able to:
+- Install and configure pyinfra
+- Execute ad-hoc commands on remote hosts
+- Create inventory files to manage hosts
+- Write deploy files with operations
+- Understand pyinfra's idempotent state management
+
+## Installation
+
+<Steps>
+  <Step title="Install pyinfra with uv">
+    The recommended way to install pyinfra is using [uv](https://docs.astral.sh/uv/):
+
+    ```bash
+    uv tool install pyinfra
+    ```
+
+    <Tip>
+      You can also install pyinfra with pip: `pip install pyinfra`
+    </Tip>
+  </Step>
+
+  <Step title="Verify installation">
+    Verify that pyinfra is installed correctly:
+
+    ```bash
+    pyinfra --version
+    ```
+  </Step>
+</Steps>
+
+## Your First pyinfra Command
+
+Let's start with some simple ad-hoc commands. The CLI always takes arguments in order: `INVENTORY` then `OPERATIONS`.
+
+### Execute Commands Locally
+
+Test pyinfra on your local machine:
+
+```bash
+pyinfra @local exec -- echo "Hello from pyinfra!"
+```
+
+<Note>
+  The `@local` connector executes commands on your local machine. This is perfect for testing!
+</Note>
+
+### Execute Commands via SSH
+
+Connect to a remote server via SSH:
+
+```bash
+pyinfra my-server.net exec -- echo "Hello world"
+```
+
+With SSH options:
+
+```bash
+pyinfra my-server.net --ssh-user vagrant --ssh-port 2222 exec -- echo "Hello world"
+```
+
+### Execute Commands in Docker
+
+Run commands in a new Docker container:
+
+```bash
+pyinfra @docker/ubuntu:22.04 exec -- echo "Hello from Docker!"
+```
+
+## Using Operations
+
+Operations are pyinfra's way of defining desired state. Unlike raw commands, operations are **idempotent** - they only make changes when necessary.
+
+### Install a Package
+
+```bash
+pyinfra @docker/ubuntu:22.04 apt.packages iftop update=true _sudo=true
+```
+
+Run this command twice - the second time, pyinfra will detect that `iftop` is already installed and report no changes needed.
+
+<CodeGroup>
+```bash First Run
+pyinfra @docker/ubuntu:22.04 apt.packages iftop update=true _sudo=true
+# Output: [ubuntu:22.04] apt.packages: Install packages: iftop
+# Changes: 1
+```
+
+```bash Second Run
+pyinfra @docker/ubuntu:22.04 apt.packages iftop update=true _sudo=true
+# Output: [ubuntu:22.04] apt.packages: Package iftop is already installed
+# Changes: 0
+```
+</CodeGroup>
+
+## Creating Your First Deploy
+
+Now let's create a reusable deploy that you can save and version control.
+
+<Steps>
+  <Step title="Create an inventory file">
+    Create a file named `inventory.py` to define your target hosts:
+
+    ```python inventory.py
+    # Simple list of hostnames
+    targets = [
+        "@local",
+        "my-server.net",
+    ]
+    ```
+
+    <Tip>
+      You can also define hosts with custom connection parameters:
+      
+      ```python
+      targets = [
+          ("web-server", {
+              "ssh_hostname": "192.168.1.10",
+              "ssh_user": "deploy",
+              "ssh_port": 2222,
+          }),
+      ]
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="Create a deploy file">
+    Create a file named `deploy.py` with your operations:
+
+    ```python deploy.py
+    from pyinfra.operations import apt, server
+
+    # Install essential packages
+    apt.packages(
+        name="Install debugging tools",
+        packages=["htop", "vim", "curl"],
+        update=True,
+        _sudo=True,
+    )
+
+    # Create a directory
+    server.shell(
+        name="Create application directory",
+        commands=["mkdir -p /opt/myapp"],
+        _sudo=True,
+    )
+    ```
+  </Step>
+
+  <Step title="Run your deploy">
+    Execute your deploy file against your inventory:
+
+    ```bash
+    pyinfra inventory.py deploy.py
+    ```
+
+    <Note>
+      pyinfra will connect to each host, detect what changes need to be made, and apply them in parallel across all hosts.
+    </Note>
+  </Step>
+
+  <Step title="Run in dry-run mode">
+    Before making actual changes, you can preview what pyinfra will do:
+
+    ```bash
+    pyinfra inventory.py deploy.py --dry
+    ```
+
+    This shows you exactly what commands will be executed without actually running them.
+  </Step>
+</Steps>
+
+## Understanding the Output
+
+When you run a deploy, pyinfra provides detailed output:
+
+```bash
+--> Loading config...
+--> Loading inventory...
+--> Connecting to hosts...
+    [local] Connected
+--> Preparing operations...
+--> Proposing operations...
+--> Beginning operation run...
+--> Starting operation: Install debugging tools
+    [local] apt-get update
+    [local] apt-get install -y htop vim curl
+--> Results:
+    Operations: 2
+    Commands: 3
+    Hosts: 1
+```
+
+## Advanced Inventory with Groups
+
+As your infrastructure grows, you can organize hosts into groups:
+
+```python inventory.py
+# Define groups of hosts
+web_servers = [
+    "web-01.example.com",
+    "web-02.example.com",
+]
+
+db_servers = [
+    ("db-01.example.com", {
+        "ssh_user": "postgres",
+    }),
+]
+
+# All hosts
+targets = web_servers + db_servers
+```
+
+Then target specific groups in your deploy:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt
+
+# Install nginx only on web servers
+if "web_servers" in host.groups:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+
+# Install postgresql only on database servers  
+if "db_servers" in host.groups:
+    apt.packages(
+        name="Install PostgreSQL",
+        packages=["postgresql"],
+        _sudo=True,
+    )
+```
+
+## Next Steps
+
+Now that you understand the basics, explore more advanced topics:
+
+- [Using Operations](/guides/using-operations) - Learn about all available operations
+- [Inventory and Data](/guides/inventory-and-data) - Master inventory management and data injection
+- [Deploying Applications](/guides/deploying-applications) - Build complete application deployments
+- [Idempotent Operations](/guides/idempotent-operations) - Understand state management
+- [Parallel Execution](/guides/parallel-execution) - Optimize performance for large infrastructures
+
+## Common Patterns
+
+<CodeGroup>
+```python Install and Configure
+from pyinfra.operations import apt, files, server
+
+# Install package
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# Upload configuration
+files.put(
+    name="Upload nginx config",
+    src="files/nginx.conf",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# Restart service
+server.service(
+    name="Restart nginx",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+)
+```
+
+```python User Management
+from pyinfra.operations import server
+
+# Create user
+server.user(
+    name="Create deploy user",
+    user="deploy",
+    home="/home/deploy",
+    shell="/bin/bash",
+    _sudo=True,
+)
+
+# Add SSH key
+files.put(
+    name="Add SSH authorized key",
+    src="keys/deploy_key.pub",
+    dest="/home/deploy/.ssh/authorized_keys",
+    user="deploy",
+    mode="600",
+    _sudo=True,
+)
+```
+
+```python Conditional Execution
+from pyinfra import host
+from pyinfra.operations import apt, yum
+
+# Install package based on OS
+if host.get_fact("LinuxDistribution") == "Ubuntu":
+    apt.packages(
+        name="Install vim",
+        packages=["vim"],
+        _sudo=True,
+    )
+elif host.get_fact("LinuxDistribution") == "CentOS":
+    yum.packages(
+        name="Install vim",
+        packages=["vim"],
+        _sudo=True,
+    )
+```
+</CodeGroup>
+
+<Tip>
+  Keep your deploy files in version control (git) so you can track changes to your infrastructure over time!
+</Tip>

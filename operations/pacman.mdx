@@ -1,0 +1,276 @@
+---
+title: pacman Operations
+description: Manage pacman packages on Arch Linux systems
+icon: archlinux
+---
+
+The `pacman` module manages packages on Arch Linux systems using the pacman package manager.
+
+## Functions
+
+### packages
+
+Install or remove pacman packages.
+
+```python
+from pyinfra.operations import pacman
+
+pacman.packages(
+    name="Install development tools",
+    packages=["git", "vim"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `pacman -Sy` before installing packages.
+</ParamField>
+
+<ParamField path="upgrade" type="bool" default={false}>
+  Run `pacman -Su` before installing packages.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like pacman: `<pkg>=<version>`
+</Note>
+
+#### Example
+
+```python
+from pyinfra.operations import pacman
+
+pacman.packages(
+    name="Install Vim and a plugin",
+    packages=["vim-fugitive", "vim"],
+    update=True,
+)
+```
+
+---
+
+### update
+
+Update pacman package database.
+
+```python
+from pyinfra.operations import pacman
+
+pacman.update(
+    name="Update package database",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### upgrade
+
+Upgrade all pacman packages.
+
+```python
+from pyinfra.operations import pacman
+
+pacman.upgrade(
+    name="Upgrade all packages",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+## Common Use Cases
+
+### System Setup
+
+```python
+from pyinfra.operations import pacman
+
+# Update package database
+pacman.update(
+    name="Update package database",
+)
+
+# Install base packages
+pacman.packages(
+    name="Install base development tools",
+    packages=[
+        "base-devel",
+        "git",
+        "vim",
+        "wget",
+        "curl",
+    ],
+)
+```
+
+### Full System Upgrade
+
+```python
+from pyinfra.operations import pacman
+
+# Update and upgrade
+pacman.packages(
+    name="Perform full system upgrade",
+    packages=[],
+    update=True,
+    upgrade=True,
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import pacman
+
+# Install development tools
+pacman.packages(
+    name="Install development environment",
+    packages=[
+        "base-devel",
+        "git",
+        "vim",
+        "tmux",
+        "python",
+        "python-pip",
+        "docker",
+        "docker-compose",
+    ],
+    update=True,
+)
+```
+
+### Web Server Setup
+
+```python
+from pyinfra.operations import pacman
+
+# Install web server stack
+pacman.packages(
+    name="Install NGINX and certbot",
+    packages=[
+        "nginx",
+        "certbot",
+        "certbot-nginx",
+    ],
+    update=True,
+)
+```
+
+### Desktop Environment
+
+```python
+from pyinfra.operations import pacman
+
+# Install Xorg and i3
+pacman.packages(
+    name="Install X server and i3 window manager",
+    packages=[
+        "xorg-server",
+        "xorg-xinit",
+        "i3-wm",
+        "i3status",
+        "dmenu",
+        "termite",
+    ],
+    update=True,
+)
+```
+
+## Arch-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Package Groups">
+    Pacman supports package groups which install multiple related packages:
+    
+    ```python
+    from pyinfra.operations import pacman
+    
+    # Install the base-devel group
+    pacman.packages(
+        name="Install base development tools",
+        packages=["base-devel"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="AUR Packages">
+    For AUR (Arch User Repository) packages, you'll need to use a helper like `yay` or `paru`:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Install AUR helper (yay)
+    server.shell(
+        name="Install yay AUR helper",
+        commands=[
+            "cd /tmp",
+            "git clone https://aur.archlinux.org/yay.git",
+            "cd yay",
+            "makepkg -si --noconfirm",
+        ],
+    )
+    
+    # Install AUR packages with yay
+    server.shell(
+        name="Install AUR packages",
+        commands=["yay -S --noconfirm package-name"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Cleaning Package Cache">
+    Clean up old packages from cache:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Remove all cached packages
+    server.shell(
+        name="Clean package cache",
+        commands=["pacman -Sc --noconfirm"],
+    )
+    
+    # Remove all cached packages and unused sync databases
+    server.shell(
+        name="Clean all cache",
+        commands=["pacman -Scc --noconfirm"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Orphaned Packages">
+    Remove packages that were installed as dependencies but are no longer needed:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Remove orphaned packages
+    server.shell(
+        name="Remove orphaned packages",
+        commands=["pacman -Rns $(pacman -Qtdq) --noconfirm || true"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Warning>
+  Always run `pacman -Sy` (update) before installing packages to ensure you're installing the latest versions and avoid partial upgrades.
+</Warning>
+
+<Note>
+  Pacman uses the `--noconfirm` flag in pyinfra operations to enable non-interactive installations.
+</Note>

@@ -1,0 +1,286 @@
+---
+title: apk Operations
+description: Manage apk packages on Alpine Linux systems
+icon: mountain
+---
+
+The `apk` module manages packages on Alpine Linux systems using the apk package manager.
+
+## Functions
+
+### packages
+
+Install, remove, or update apk packages.
+
+```python
+from pyinfra.operations import apk
+
+apk.packages(
+    name="Install web utilities",
+    packages=["nginx", "curl"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `apk update` before installing packages.
+</ParamField>
+
+<ParamField path="upgrade" type="bool" default={false}>
+  Run `apk upgrade` before installing packages.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like apk: `<pkg>=<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import apk
+
+# Update package list and install packages
+apk.packages(
+    name="Install Asterisk and Vim",
+    packages=["asterisk", "vim"],
+    update=True,
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import apk
+
+# Install the latest versions of packages (always check)
+apk.packages(
+    name="Install latest Vim",
+    packages=["vim"],
+    latest=True,
+)
+```
+
+```python With Upgrade
+from pyinfra.operations import apk
+
+# Upgrade all packages before installing new ones
+apk.packages(
+    name="Install packages after system upgrade",
+    packages=["git", "python3"],
+    upgrade=True,
+)
+```
+</CodeGroup>
+
+---
+
+### update
+
+Update apk package indexes.
+
+```python
+from pyinfra.operations import apk
+
+apk.update(
+    name="Update apk repositories",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### upgrade
+
+Upgrade all apk packages.
+
+```python
+from pyinfra.operations import apk
+
+apk.upgrade(
+    name="Upgrade all packages",
+    available=True,
+)
+```
+
+<ParamField path="available" type="bool" default={false}>
+  Force all packages to be upgraded (recommended on whole Alpine version upgrades).
+</ParamField>
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+## Common Use Cases
+
+### Basic System Setup
+
+```python
+from pyinfra.operations import apk
+
+# Update repositories
+apk.update(
+    name="Update package repositories",
+)
+
+# Install essential packages
+apk.packages(
+    name="Install essential tools",
+    packages=[
+        "bash",
+        "curl",
+        "wget",
+        "git",
+        "vim",
+    ],
+)
+```
+
+### Container Base Image Setup
+
+```python
+from pyinfra.operations import apk
+
+# Minimal installation for containers
+apk.packages(
+    name="Install runtime dependencies",
+    packages=[
+        "ca-certificates",
+        "tzdata",
+    ],
+    update=True,
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import apk
+
+# Install build tools
+apk.packages(
+    name="Install build dependencies",
+    packages=[
+        "build-base",
+        "gcc",
+        "g++",
+        "make",
+        "cmake",
+    ],
+    update=True,
+)
+
+# Install development tools
+apk.packages(
+    name="Install development tools",
+    packages=[
+        "git",
+        "vim",
+        "bash",
+        "curl",
+    ],
+)
+```
+
+### Python Development
+
+```python
+from pyinfra.operations import apk
+
+# Install Python and dependencies
+apk.packages(
+    name="Install Python development environment",
+    packages=[
+        "python3",
+        "python3-dev",
+        "py3-pip",
+        "py3-virtualenv",
+    ],
+    update=True,
+)
+```
+
+### System Upgrade
+
+```python
+from pyinfra.operations import apk
+
+# Update repositories
+apk.update(
+    name="Update repositories",
+)
+
+# Upgrade all packages
+apk.upgrade(
+    name="Upgrade all packages",
+    available=True,
+)
+```
+
+## Alpine-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Virtual Packages">
+    Alpine supports virtual packages for build dependencies that can be easily removed:
+    
+    ```python
+    from pyinfra.operations import apk
+    
+    # Install build dependencies as virtual package
+    apk.packages(
+        name="Install build dependencies",
+        packages=[".build-deps", "gcc", "musl-dev"],
+    )
+    
+    # Later, remove all build dependencies
+    apk.packages(
+        name="Remove build dependencies",
+        packages=[".build-deps"],
+        present=False,
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Edge Repository">
+    For latest packages, you may need to use the edge repository:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Add edge repository
+    server.shell(
+        name="Enable edge repository",
+        commands=[
+            'echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories',
+            'echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories',
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="No Cache Option">
+    For minimal container images, use --no-cache:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Install without cache",
+        commands=["apk add --no-cache nginx"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>

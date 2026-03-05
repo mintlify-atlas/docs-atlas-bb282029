@@ -1,0 +1,101 @@
+---
+title: crontab
+description: Manage crontab entries
+---
+
+Manage crontab entries.
+
+## Functions
+
+### `crontab.crontab`
+
+Add/remove/update crontab entries.
+
+```python
+crontab.crontab(
+    command,
+    present=True,
+    user=None,
+    cron_name=None,
+    minute="*",
+    hour="*",
+    month="*",
+    day_of_week="*",
+    day_of_month="*",
+    special_time=None,
+    interpolate_variables=False,
+)
+```
+
+<ParamField name="command" type="str" required>
+  The command for the cron
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether this cron command should exist
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  The user whose crontab to manage
+</ParamField>
+
+<ParamField name="cron_name" type="str" default="None">
+  Name the cronjob so future changes to the command will overwrite
+</ParamField>
+
+<ParamField name="minute" type="str" default="*">
+  Which minutes to execute the cron
+</ParamField>
+
+<ParamField name="hour" type="str" default="*">
+  Which hours to execute the cron
+</ParamField>
+
+<ParamField name="month" type="str" default="*">
+  Which months to execute the cron
+</ParamField>
+
+<ParamField name="day_of_week" type="str" default="*">
+  Which day of the week to execute the cron
+</ParamField>
+
+<ParamField name="day_of_month" type="str" default="*">
+  Which day of the month to execute the cron
+</ParamField>
+
+<ParamField name="special_time" type="str" default="None">
+  Cron "nickname" time (@reboot, @daily, etc), overrides others
+</ParamField>
+
+<ParamField name="interpolate_variables" type="bool" default="False">
+  Whether to interpolate variables in command
+</ParamField>
+
+<Note>
+**Cron commands:** Unless `cron_name` is specified the command is used to identify crontab entries. This means commands must be unique within a given users crontab. If you require multiple identical commands, provide a different name argument for each.
+
+**Special times:** When provided, `special_time` will be used instead of any values passed in for `minute`/`hour`/`month`/`day_of_week`/`day_of_month`.
+</Note>
+
+## Examples
+
+```python
+from pyinfra.operations import crontab
+
+# Backup /etc weekly
+crontab.crontab(
+    name="Backup /etc weekly",
+    command="/bin/tar cf /tmp/etc_bup.tar /etc",
+    cron_name="backup_etc",
+    day_of_week=0,
+    hour=1,
+    minute=0,
+)
+
+# Run a script daily at midnight
+crontab.crontab(
+    name="Run daily cleanup",
+    command="/usr/local/bin/cleanup.sh",
+    special_time="@daily",
+)
+```

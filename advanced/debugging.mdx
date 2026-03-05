@@ -1,0 +1,583 @@
+---
+title: Debugging
+description: Learn how to debug pyinfra deployments and troubleshoot issues
+---
+
+Debugging infrastructure deployments can be challenging. This guide provides techniques and tools to identify and fix issues in your pyinfra deployments.
+
+## Debug Mode
+
+Enable debug mode for verbose output:
+
+```bash
+# Show debug information
+pyinfra --debug inventory.py deploy.py
+
+# Show debug info plus fact input/output
+pyinfra --debug --debug-facts inventory.py deploy.py
+
+# Show state and operation details
+pyinfra --debug --debug-operations inventory.py deploy.py
+```
+
+In Python:
+
+```python
+from pyinfra import Config
+import logging
+
+config = Config(
+    DEBUG=True,
+    DEBUG_OPERATIONS=True,
+    DEBUG_FACTS=True,
+    LOG_LEVEL=logging.DEBUG,
+)
+```
+
+## Dry Run Mode
+
+Test operations without executing commands:
+
+```bash
+# Show what would be executed
+pyinfra --dry inventory.py deploy.py
+
+# Combine with debug for maximum visibility
+pyinfra --dry --debug inventory.py deploy.py
+```
+
+In code:
+
+```python
+from pyinfra import Config
+
+config = Config(
+    DRY=True,  # Don't execute commands
+)
+```
+
+## Verbose Output
+
+### Print Command Input and Output
+
+```bash
+# Show commands being executed
+pyinfra -v inventory.py deploy.py
+
+# Show even more detail
+pyinfra -vv inventory.py deploy.py
+```
+
+Per-operation control:
+
+```python
+from pyinfra.operations import server
+
+server.shell(
+    name="Debug this command",
+    commands=["complex-command.sh"],
+    _print_input=True,   # Show command being executed
+    _print_output=True,  # Show command output
+)
+```
+
+### Inspect Operation Results
+
+Check operation execution details:
+
+```python
+from pyinfra import host
+from pyinfra.operations import files
+
+result = files.directory(
+    name="Create app directory",
+    path="/opt/app",
+)
+
+# Check if operation would make changes
+if result.will_change:
+    print("Operation will make changes")
+
+# After execution
+if result.is_complete():
+    print(f"Success: {result.did_succeed()}")
+    print(f"Changed: {result.did_change()}")
+    print(f"Commands: {result._commands}")
+    print(f"Output: {result.stdout}")
+    print(f"Errors: {result.stderr}")
+```
+
+## Logging
+
+### Custom Logging
+
+```python
+from pyinfra import logger, host
+from pyinfra.api import operation
+
+@operation()
+def debug_operation():
+    """Operation with debug logging."""
+    logger.debug(f"Running on host: {host.name}")
+    logger.info(f"Host data: {host.data}")
+    logger.warning("This is a warning")
+    logger.error("This is an error")
+    
+    yield "echo 'Debug operation'"
+```
+
+### Save Output to File
+
+```bash
+# Redirect all output to file
+pyinfra inventory.py deploy.py 2>&1 | tee deployment.log
+
+# Or use pyinfra's logging
+pyinfra --debug inventory.py deploy.py > debug.log 2>&1
+```
+
+## Debugging Facts
+
+### Inspect Fact Values
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Hostname, Os, KernelVersion
+from pyinfra.facts.files import File
+
+# Get and print facts
+hostname = host.get_fact(Hostname)
+print(f"Hostname: {hostname}")
+
+os_name = host.get_fact(Os)
+print(f"OS: {os_name}")
+
+kernel = host.get_fact(KernelVersion)
+print(f"Kernel: {kernel}")
+
+# Check file facts
+file_info = host.get_fact(File, path="/etc/hosts")
+if file_info:
+    print(f"File user: {file_info['user']}")
+    print(f"File mode: {file_info['mode']}")
+    print(f"File size: {file_info['size']}")
+else:
+    print("File does not exist")
+```
+
+### Test Facts Interactively
+
+Use pyinfra shell:
+
+```bash
+# Start interactive shell
+pyinfra @local exec -- python3
+
+# Or run fact directly
+pyinfra @local exec -- uname -n
+```
+
+Create a fact testing script:
+
+```python
+# test_facts.py
+from pyinfra import host
+from pyinfra.facts.server import *
+from pyinfra.facts.files import *
+
+print("=== Server Facts ===")
+print(f"Hostname: {host.get_fact(Hostname)}")
+print(f"User: {host.get_fact(User)}")
+print(f"Home: {host.get_fact(Home)}")
+print(f"Os: {host.get_fact(Os)}")
+print(f"Arch: {host.get_fact(Arch)}")
+
+print("\n=== File Facts ===")
+for path in ["/etc/hosts", "/tmp", "/var/log"]:
+    info = host.get_fact(File, path=path) or host.get_fact(Directory, path=path)
+    print(f"{path}: {info}")
+```
+
+Run it:
+
+```bash
+pyinfra inventory.py test_facts.py
+```
+
+## Debugging Operations
+
+### Check Operation State
+
+```python
+from pyinfra import state, host
+from pyinfra.api import operation
+
+@operation()
+def debug_state_operation():
+    """Check deployment state during operation."""
+    print(f"Current stage: {state.current_stage}")
+    print(f"Is executing: {state.is_executing}")
+    print(f"Host in operation: {host.in_op}")
+    print(f"Current op hash: {host.current_op_hash}")
+    
+    yield "echo 'Checking state'"
+```
+
+### Trace Operation Execution
+
+```python
+from pyinfra import logger, host
+from pyinfra.api import operation
+
+@operation()
+def traced_operation(param1: str):
+    """Operation with execution tracing."""
+    logger.debug(f"=== traced_operation START ===")
+    logger.debug(f"Parameters: param1={param1}")
+    logger.debug(f"Host: {host.name}")
+    logger.debug(f"Host data: {host.data}")
+    
+    try:
+        # Check preconditions
+        from pyinfra.facts.files import Directory
+        dir_exists = host.get_fact(Directory, path="/opt")
+        logger.debug(f"/opt exists: {dir_exists is not None}")
+        
+        # Execute
+        yield "echo 'Executing'"
+        
+        logger.debug(f"=== traced_operation END ===")
+        
+    except Exception as e:
+        logger.error(f"Operation failed: {e}")
+        raise
+```
+
+## Debugging Connection Issues
+
+### Test SSH Connectivity
+
+```bash
+# Test basic SSH connection
+ssh -vvv user@host
+
+# Test with pyinfra
+pyinfra user@host exec -- echo "Connection test"
+
+# Debug SSH in pyinfra
+pyinfra --debug user@host exec -- echo "Debug connection"
+```
+
+### SSH Configuration Issues
+
+```python
+from pyinfra import Config
+
+config = Config(
+    CONNECT_TIMEOUT=30,  # Increase timeout
+    SSH_PARAMIKO_CONNECT_KWARGS={
+        'timeout': 30,
+        'banner_timeout': 30,
+        'auth_timeout': 30,
+    },
+)
+```
+
+### Connector-Specific Debugging
+
+```python
+from pyinfra import logger
+from pyinfra.connectors.base import BaseConnector
+from typing_extensions import override
+
+class DebugConnector(BaseConnector):
+    """Connector with debug logging."""
+    
+    @override
+    def connect(self):
+        logger.debug(f"Connecting to {self.host.name}")
+        logger.debug(f"Connector data: {self.data}")
+        try:
+            super().connect()
+            logger.debug("Connection successful")
+        except Exception as e:
+            logger.error(f"Connection failed: {e}")
+            raise
+    
+    @override
+    def run_shell_command(self, command, **kwargs):
+        logger.debug(f"Executing command: {command}")
+        success, output = super().run_shell_command(command, **kwargs)
+        logger.debug(f"Command result: success={success}")
+        logger.debug(f"Command output: {output.stdout}")
+        return success, output
+```
+
+## Common Issues and Solutions
+
+### Issue: Operation Fails Silently
+
+**Problem**: Operation doesn't execute or fails without error messages.
+
+**Solution**: Enable debug mode and check operation conditions:
+
+```python
+from pyinfra import host, logger
+from pyinfra.api import operation
+
+@operation()
+def silent_fail_debug():
+    """Debug silently failing operation."""
+    logger.debug("Operation started")
+    
+    # Check if condition is met
+    from pyinfra.facts.server import User
+    current_user = host.get_fact(User)
+    logger.debug(f"Current user: {current_user}")
+    
+    if current_user != "root":
+        logger.warning("Not running as root, operation may fail")
+    
+    # Check _if conditions
+    if host.current_op_global_arguments:
+        _if = host.current_op_global_arguments.get("_if")
+        logger.debug(f"_if condition: {_if}")
+    
+    yield "echo 'Operation executing'"
+```
+
+### Issue: Fact Returns Unexpected Value
+
+**Problem**: Fact returns None or wrong value.
+
+**Solution**: Debug the fact command and processing:
+
+```python
+from pyinfra import host, logger
+from pyinfra.api import FactBase
+from typing_extensions import override
+
+class DebugFact(FactBase):
+    """Fact with debug output."""
+    
+    @override
+    def command(self, param: str):
+        cmd = f"cat /etc/{param}"
+        logger.debug(f"Fact command: {cmd}")
+        return cmd
+    
+    @override
+    def process(self, output: list[str]):
+        logger.debug(f"Fact output lines: {len(output)}")
+        logger.debug(f"Fact output: {output}")
+        
+        if not output:
+            logger.warning("Fact returned no output")
+            return None
+        
+        result = "\n".join(output)
+        logger.debug(f"Fact result: {result}")
+        return result
+
+# Test it
+result = host.get_fact(DebugFact, param="hostname")
+print(f"Fact result: {result}")
+```
+
+### Issue: Commands Not Idempotent
+
+**Problem**: Operations make changes every time they run.
+
+**Solution**: Add proper state checks:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation
+from pyinfra.facts.files import File
+
+@operation()
+def idempotent_file_operation(path: str, content: str):
+    """Only update file if content differs."""
+    from pyinfra.facts.files import FileContents
+    
+    current_content = host.get_fact(FileContents, path=path)
+    
+    if current_content != content:
+        print(f"File content differs, updating {path}")
+        yield f"echo '{content}' > {path}"
+    else:
+        host.noop(f"file {path} already has correct content")
+```
+
+### Issue: Slow Performance
+
+**Problem**: Deployment takes too long.
+
+**Solution**: Profile and optimize (see [Performance Tuning](/advanced/performance-tuning)):
+
+```python
+import time
+from pyinfra import logger
+from pyinfra.api import operation
+
+@operation()
+def profiled_operation():
+    """Operation with timing information."""
+    start = time.time()
+    
+    # Your operation logic
+    yield "sleep 1"
+    
+    elapsed = time.time() - start
+    logger.info(f"Operation took {elapsed:.2f}s")
+```
+
+## Interactive Debugging
+
+### Using Python Debugger
+
+```python
+from pyinfra.api import operation
+import pdb
+
+@operation()
+def debug_with_pdb():
+    """Drop into debugger."""
+    # Set breakpoint
+    pdb.set_trace()
+    
+    # Inspect variables
+    from pyinfra import host, state
+    print(f"Host: {host.name}")
+    print(f"State: {state}")
+    
+    yield "echo 'After breakpoint'"
+```
+
+### Using IPython
+
+```python
+from pyinfra.api import operation
+
+@operation()
+def debug_with_ipython():
+    """Interactive IPython shell."""
+    try:
+        from IPython import embed
+        
+        # Drop into IPython shell
+        from pyinfra import host, state
+        embed()
+        
+    except ImportError:
+        print("IPython not installed")
+    
+    yield "echo 'After IPython'"
+```
+
+## Testing Operations
+
+### Unit Test Operations
+
+```python
+import unittest
+from unittest.mock import Mock, patch
+from pyinfra.api import State, Config, Inventory
+from pyinfra.api.operation import operation
+
+class TestMyOperation(unittest.TestCase):
+    def setUp(self):
+        """Set up test fixtures."""
+        self.state = State(
+            inventory=Inventory(([], {})),
+            config=Config()
+        )
+    
+    @patch('pyinfra.host.get_fact')
+    def test_operation_with_existing_file(self, mock_get_fact):
+        """Test operation when file exists."""
+        # Mock fact to return file exists
+        mock_get_fact.return_value = {"mode": 644}
+        
+        # Import and test your operation
+        from myoperations import ensure_file
+        
+        result = ensure_file(path="/test", mode="644")
+        
+        # Assert operation is a no-op
+        self.assertTrue(result.did_not_change())
+```
+
+### Integration Tests
+
+```python
+# test_deploy.py
+from pyinfra import host
+from pyinfra.operations import server, files
+
+def test_deployment():
+    """Test complete deployment."""
+    # Deploy
+    files.directory(
+        name="Create test dir",
+        path="/tmp/test",
+    )
+    
+    # Verify
+    from pyinfra.facts.files import Directory
+    result = host.get_fact(Directory, path="/tmp/test")
+    assert result is not None, "Directory was not created"
+    
+    # Cleanup
+    files.directory(
+        name="Remove test dir",
+        path="/tmp/test",
+        present=False,
+    )
+
+# Run test
+if __name__ == "__main__":
+    test_deployment()
+    print("All tests passed!")
+```
+
+Run:
+
+```bash
+pyinfra @local test_deploy.py
+```
+
+## Best Practices
+
+1. **Use --dry first**: Always test with --dry before executing
+2. **Enable debug mode**: Use --debug when troubleshooting
+3. **Check facts early**: Verify fact values at the start of operations
+4. **Log liberally**: Add logger statements in complex operations
+5. **Test incrementally**: Test operations on a single host first
+6. **Use assertions**: Add assert statements to catch unexpected state
+7. **Check return values**: Always inspect operation results
+8. **Handle errors**: Use try/except in operations and facts
+9. **Version control**: Keep deployment scripts in git for rollback
+10. **Document issues**: Maintain a log of common issues and solutions
+
+## Debug Checklist
+
+When debugging issues:
+
+- [ ] Run with `--dry --debug` to see what would happen
+- [ ] Check SSH connectivity independently
+- [ ] Verify inventory is loaded correctly
+- [ ] Test facts return expected values
+- [ ] Check operation conditions (_if, _when)
+- [ ] Inspect operation results (did_succeed, stdout, stderr)
+- [ ] Review logs for errors and warnings
+- [ ] Test on single host before deploying to all
+- [ ] Verify file permissions and ownership
+- [ ] Check for conflicting operations
+
+## Next Steps
+
+- Learn about [Performance Tuning](/advanced/performance-tuning) to optimize deployments
+- Explore [Writing Operations](/advanced/writing-operations) for better operation design
+- See [Writing Facts](/advanced/writing-facts) for custom fact debugging
+- Check [API Reference](/api-reference) for complete API documentation

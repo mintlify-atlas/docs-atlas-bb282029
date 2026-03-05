@@ -1,0 +1,542 @@
+---
+title: Idempotent Operations
+description: Understand how pyinfra's idempotent operations work and how to write predictable, repeatable infrastructure code
+---
+
+Idempotency is a core principle of pyinfra. An idempotent operation produces the same result when run multiple times - the second run detects that the desired state is already achieved and makes no changes. This guide explains how pyinfra achieves idempotency and how to use it effectively.
+
+## What is Idempotency?
+
+An operation is **idempotent** if running it multiple times has the same effect as running it once:
+
+<CodeGroup>
+```bash First Run
+pyinfra @local apt.packages vim _sudo=true
+# Output: Install packages: vim
+# Commands: 2
+# Changes: 1
+```
+
+```bash Second Run
+pyinfra @local apt.packages vim _sudo=true
+# Output: Package vim is already installed
+# Commands: 0
+# Changes: 0
+```
+</CodeGroup>
+
+The second run detects that `vim` is already installed and skips execution, making **zero changes**.
+
+## Why Idempotency Matters
+
+Idempotent operations provide several critical benefits:
+
+1. **Safe to re-run** - Deploy scripts can run repeatedly without breaking things
+2. **Predictable results** - Same code always produces same end state
+3. **Change detection** - See exactly what will change before applying
+4. **Drift correction** - Re-running deploys fixes configuration drift
+5. **Faster execution** - Skip operations that don't need changes
+
+<Tip>
+  You can run your deploys as often as you want - pyinfra only makes changes when the current state differs from the desired state.
+</Tip>
+
+## How pyinfra Achieves Idempotency
+
+Pyinfra achieves idempotency through a two-phase process:
+
+### Phase 1: Detect Changes
+
+pyinfra first checks the current state using **facts**:
+
+```python
+from pyinfra.operations import files
+
+files.file(
+    name="Ensure file exists",
+    path="/etc/myapp/config.txt",
+    mode="644",
+    user="root",
+    _sudo=True,
+)
+```
+
+Before making changes, pyinfra:
+1. Checks if `/etc/myapp/config.txt` exists
+2. Checks file permissions, owner, and group
+3. Compares with desired state (mode=644, user=root)
+4. Only generates commands if changes are needed
+
+### Phase 2: Apply Changes
+
+If changes are detected, pyinfra generates and executes the minimum commands needed:
+
+```bash
+# Only runs if file doesn't exist or has wrong permissions
+touch /etc/myapp/config.txt
+chmod 644 /etc/myapp/config.txt
+chown root:root /etc/myapp/config.txt
+```
+
+## Idempotent vs Non-Idempotent Operations
+
+### Idempotent Operations
+
+Most pyinfra operations are idempotent by default:
+
+<CodeGroup>
+```python Package Management
+from pyinfra.operations import apt
+
+# Idempotent - only installs if not present
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# Run multiple times - same result
+```
+
+```python File Operations
+from pyinfra.operations import files
+
+# Idempotent - only creates if missing
+files.directory(
+    name="Create directory",
+    path="/opt/myapp",
+    mode="755",
+    _sudo=True,
+)
+
+# Idempotent - only changes if different
+files.file(
+    name="Ensure file has correct permissions",
+    path="/etc/config",
+    mode="600",
+    user="app",
+    _sudo=True,
+)
+```
+
+```python Service Management
+from pyinfra.operations import server
+
+# Idempotent - only starts if not running
+server.service(
+    name="Ensure nginx is running",
+    service="nginx",
+    running=True,
+    enabled=True,
+    _sudo=True,
+)
+```
+</CodeGroup>
+
+### Non-Idempotent Operations
+
+Some operations are inherently non-idempotent and run every time:
+
+```python
+from pyinfra.operations import server
+
+# Non-idempotent - runs every time
+server.shell(
+    name="Echo current date",
+    commands=["echo $(date)"],
+)
+
+# Non-idempotent - reboots every time
+server.reboot(
+    name="Reboot server",
+)
+```
+
+<Note>
+  Operations marked with `is_idempotent=False` will execute every time. Use them carefully in production deploys.
+</Note>
+
+## Dry-Run Mode
+
+Dry-run mode shows you what will change **without making any changes**:
+
+```bash
+pyinfra inventory.py deploy.py --dry
+```
+
+Example output:
+
+```
+--> Proposing operations...
+--> Proposed changes:
+    [web-01] apt.packages: Install packages: nginx, postgresql
+    [web-01] files.directory: Create directory: /opt/myapp
+    [web-01] files.template: Upload nginx config (will change)
+    [web-01] server.service: Restart nginx
+
+--> Operations: 4
+--> Commands to execute: 6
+--> Hosts: 1
+```
+
+<Tip>
+  Always use `--dry` to preview changes before deploying to production!
+</Tip>
+
+## Smart Service Restarts
+
+Use operation return values to restart services only when configs change:
+
+```python
+from pyinfra.operations import files, server
+
+# Upload config and capture result
+config_changed = files.template(
+    name="Upload nginx config",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# Only restart if config actually changed
+server.service(
+    name="Restart nginx if needed",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+    _if=lambda: config_changed.did_change(),
+)
+```
+
+<CodeGroup>
+```bash Config Changed
+# First run - config is different
+[web-01] files.template: Upload nginx config (changed)
+[web-01] server.service: Restart nginx
+# nginx was restarted because config changed
+```
+
+```bash Config Unchanged  
+# Second run - config already correct
+[web-01] files.template: Upload nginx config (no changes)
+[web-01] server.service: Restart nginx (skipped)
+# nginx restart was skipped because config didn't change
+```
+</CodeGroup>
+
+## Checking Operation Results
+
+Operation return values provide metadata about execution:
+
+```python
+from pyinfra.operations import apt, server
+
+# Capture operation result
+install_result = apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# Check if operation made changes
+if install_result.did_change():
+    print("Nginx was installed")
+    
+# Check if operation succeeded
+if install_result.did_succeed():
+    print("Installation successful")
+    
+# Check if operation made no changes
+if install_result.did_not_change():
+    print("Nginx was already installed")
+```
+
+### Available Methods
+
+| Method | Description |
+|--------|-------------|
+| `did_change()` | Returns `True` if operation made changes |
+| `did_not_change()` | Returns `True` if no changes were made |
+| `did_succeed()` | Returns `True` if operation succeeded |
+| `did_error()` | Returns `True` if operation failed |
+| `will_change` | Property that checks if operation will make changes (before execution) |
+
+## Handling Non-Idempotent Commands
+
+When you must use non-idempotent shell commands, add checks to make them idempotent:
+
+### Check Before Execute
+
+```python
+from pyinfra import host
+from pyinfra.operations import server
+from pyinfra.facts.files import Directory
+
+# Check if directory exists before creating
+if not host.get_fact(Directory, path="/opt/myapp"):
+    server.shell(
+        name="Create directory",
+        commands=["mkdir -p /opt/myapp"],
+        _sudo=True,
+    )
+```
+
+<Tip>
+  Better yet, use the idempotent `files.directory` operation instead of shell commands!
+</Tip>
+
+### Use Conditional Execution
+
+```python
+from pyinfra.operations import server
+
+# Only run if condition is met
+server.shell(
+    name="Initialize database",
+    commands=["./scripts/init_db.sh"],
+    _if=lambda: not host.get_fact(File, path="/var/lib/db/.initialized"),
+    _sudo=True,
+)
+
+# Create marker file after initialization
+server.shell(
+    name="Mark database as initialized",
+    commands=["touch /var/lib/db/.initialized"],
+    _sudo=True,
+)
+```
+
+## Working with Facts
+
+Facts are how pyinfra gathers information about the current state:
+
+```python
+from pyinfra import host
+from pyinfra.operations import apt, yum
+
+# Get OS distribution fact
+distro = host.get_fact("LinuxDistribution")
+
+# Use fact for conditional logic
+if distro in ["Ubuntu", "Debian"]:
+    apt.packages(
+        name="Install package",
+        packages=["nginx"],
+        _sudo=True,
+    )
+elif distro in ["CentOS", "RedHat"]:
+    yum.packages(
+        name="Install package",
+        packages=["nginx"],
+        _sudo=True,
+    )
+```
+
+### Common Facts
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Os, Arch, Kernel
+from pyinfra.facts.files import File, Directory
+from pyinfra.facts.deb import DebPackages
+
+# System information
+os_name = host.get_fact(Os)
+architecture = host.get_fact(Arch)
+kernel_version = host.get_fact(Kernel)
+
+# File system
+file_exists = host.get_fact(File, path="/etc/nginx/nginx.conf")
+dir_exists = host.get_fact(Directory, path="/opt/myapp")
+
+# Package information  
+packages = host.get_fact(DebPackages)
+if "nginx" in packages:
+    print(f"Nginx version: {packages['nginx']['version']}")
+```
+
+<Note>
+  Facts are cached during the prepare phase. They represent the state **before** operations are executed.
+</Note>
+
+## Caution: Facts During Execution
+
+Be careful when using facts that may change during execution:
+
+<CodeGroup>
+```python Bad Example
+from pyinfra import host
+from pyinfra.operations import apt, files
+from pyinfra.facts.files import File
+
+# Install nginx
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# BAD: This fact was gathered BEFORE nginx was installed
+# so it will be False even though nginx is now installed!
+if host.get_fact(File, path="/etc/nginx/nginx.conf"):
+    files.file(
+        name="Remove default config",
+        path="/etc/nginx/nginx.conf",
+        present=False,
+        _sudo=True,
+    )
+```
+
+```python Good Example
+from pyinfra import host
+from pyinfra.operations import apt, files
+
+# Install nginx
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# GOOD: Just use idempotent operation
+# It will handle the check properly
+files.file(
+    name="Remove default config if present",
+    path="/etc/nginx/nginx.conf",
+    present=False,
+    _sudo=True,
+)
+```
+</CodeGroup>
+
+<Note>
+  Always prefer using idempotent operations over manual fact checks. Operations handle state detection correctly.
+</Note>
+
+## File Upload Idempotency
+
+File operations detect changes by comparing checksums:
+
+```python
+from pyinfra.operations import files
+
+# Only uploads if local and remote files differ
+files.put(
+    name="Upload config file",
+    src="config/app.conf",
+    dest="/etc/myapp/app.conf",
+    mode="644",
+    _sudo=True,
+)
+```
+
+Pyinfra:
+1. Calculates checksum of local file
+2. Calculates checksum of remote file (if exists)
+3. Only uploads if checksums differ or file doesn't exist
+
+### Template Idempotency
+
+Templates also use checksums to detect changes:
+
+```python
+from pyinfra.operations import files
+
+files.template(
+    name="Upload nginx config",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/nginx.conf",
+    port=80,
+    server_name="example.com",
+    _sudo=True,
+)
+```
+
+Pyinfra:
+1. Renders template with provided variables
+2. Calculates checksum of rendered content
+3. Compares with remote file checksum
+4. Only uploads if different
+
+## Testing Idempotency
+
+Always test that your deploys are truly idempotent:
+
+<Steps>
+  <Step title="Run deploy first time">
+    ```bash
+    pyinfra inventory.py deploy.py
+    # Should show changes
+    ```
+  </Step>
+
+  <Step title="Run deploy second time">
+    ```bash
+    pyinfra inventory.py deploy.py
+    # Should show NO changes
+    ```
+  </Step>
+
+  <Step title="Verify no changes">
+    The second run should report:
+    ```
+    Operations: X
+    Commands: 0
+    Changes: 0
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  If your second run shows changes, investigate which operations are not idempotent and fix them.
+</Tip>
+
+## Best Practices
+
+<Tip>
+  **Use idempotent operations** - Prefer built-in operations over raw shell commands:
+  
+  ```python
+  # Good
+  files.directory(name="Create dir", path="/opt/app", _sudo=True)
+  
+  # Bad
+  server.shell(name="Create dir", commands=["mkdir /opt/app"], _sudo=True)
+  ```
+</Tip>
+
+<Tip>
+  **Check return values** - Use operation results for conditional logic:
+  
+  ```python
+  changed = files.template(name="Upload config", ...)
+  server.service(
+      name="Restart if config changed",
+      service="app",
+      restarted=True,
+      _if=lambda: changed.did_change(),
+  )
+  ```
+</Tip>
+
+<Tip>
+  **Use dry-run mode** - Preview changes before applying:
+  
+  ```bash
+  pyinfra inventory.py deploy.py --dry
+  ```
+</Tip>
+
+<Tip>
+  **Test idempotency** - Run deploys twice and verify the second run makes no changes
+</Tip>
+
+<Tip>
+  **Avoid state-dependent facts** - Don't use facts that may change during execution for conditional logic
+</Tip>
+
+## Next Steps
+
+- [Parallel Execution](/guides/parallel-execution) - Scale idempotent operations across many hosts
+- [Using Operations](/guides/using-operations) - Learn about all available idempotent operations
+- [Deploying Applications](/guides/deploying-applications) - Build complete idempotent deployments

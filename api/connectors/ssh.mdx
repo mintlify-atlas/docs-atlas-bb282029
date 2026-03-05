@@ -1,0 +1,456 @@
+---
+title: SSH Connector
+description: Connect to hosts over SSH (default connector)
+---
+
+The SSH connector is pyinfra's default connector for connecting to remote hosts using SSH. It uses Paramiko for SSH communication and supports various authentication methods.
+
+## Overview
+
+The SSH connector is used by default for all hosts unless another connector is specified:
+
+```shell
+# These are identical
+pyinfra my-host.net ...
+pyinfra @ssh/my-host.net ...
+```
+
+## Connection Data
+
+Configure SSH connection using inventory data:
+
+<ParamField path="ssh_hostname" type="str">
+  SSH hostname or IP address to connect to.
+</ParamField>
+
+<ParamField path="ssh_port" type="int" default={22}>
+  SSH port number.
+</ParamField>
+
+<ParamField path="ssh_user" type="str">
+  SSH username for authentication.
+</ParamField>
+
+<ParamField path="ssh_password" type="str">
+  SSH password for authentication (not recommended, use keys instead).
+</ParamField>
+
+<ParamField path="ssh_key" type="str">
+  Path to SSH private key file.
+</ParamField>
+
+<ParamField path="ssh_key_password" type="str">
+  Password for encrypted SSH private key.
+</ParamField>
+
+<ParamField path="ssh_allow_agent" type="bool" default={true}>
+  Whether to use SSH agent for authentication.
+</ParamField>
+
+<ParamField path="ssh_look_for_keys" type="bool" default={true}>
+  Whether to search for SSH keys in standard locations.
+</ParamField>
+
+<ParamField path="ssh_forward_agent" type="bool" default={false}>
+  Whether to enable SSH agent forwarding.
+</ParamField>
+
+<ParamField path="ssh_config_file" type="str">
+  Path to SSH config file.
+</ParamField>
+
+<ParamField path="ssh_known_hosts_file" type="str">
+  Path to SSH known_hosts file.
+</ParamField>
+
+<ParamField path="ssh_strict_host_key_checking" type="str" default="accept-new">
+  Host key checking mode: `accept-new`, `yes`, or `no`.
+</ParamField>
+
+<ParamField path="ssh_paramiko_connect_kwargs" type="dict">
+  Additional keyword arguments passed to Paramiko's `SSHClient.connect()`.
+</ParamField>
+
+<ParamField path="ssh_connect_retries" type="int" default={0}>
+  Number of connection retry attempts.
+</ParamField>
+
+<ParamField path="ssh_connect_retry_min_delay" type="float" default={0.1}>
+  Minimum delay between retries (seconds).
+</ParamField>
+
+<ParamField path="ssh_connect_retry_max_delay" type="float" default={0.5}>
+  Maximum delay between retries (seconds).
+</ParamField>
+
+<ParamField path="ssh_file_transfer_protocol" type="str" default="sftp">
+  Protocol for file transfers: `sftp` or `scp`.
+</ParamField>
+
+## Inventory Examples
+
+### Single Host with SSH Forward Agent
+
+```python
+# inventory.py
+hosts = [
+    ("my-host.net", {"ssh_forward_agent": True}),
+]
+```
+
+### Multiple Hosts with Shared SSH User
+
+```python
+# inventory.py
+hosts = (
+    ["host1.example.com", "host2.example.com"],
+    {"ssh_user": "deploy"},
+)
+```
+
+### Multiple Hosts with Different Users
+
+```python
+# inventory.py
+hosts = [
+    ("host1.example.com", {"ssh_user": "ubuntu"}),
+    ("host2.example.com", {"ssh_user": "admin"}),
+    ("host3.example.com", {"ssh_user": "centos"}),
+]
+```
+
+### Using SSH Config File
+
+```python
+# inventory.py
+hosts = [
+    ("host1", {"ssh_config_file": "~/.ssh/config"}),
+]
+```
+
+With `~/.ssh/config`:
+```
+Host host1
+    HostName 192.168.1.100
+    User deploy
+    Port 2222
+    IdentityFile ~/.ssh/deploy_key
+```
+
+### Custom SSH Port and Key
+
+```python
+# inventory.py
+hosts = [
+    ("my-host.net", {
+        "ssh_port": 2222,
+        "ssh_user": "deploy",
+        "ssh_key": "~/.ssh/deploy_key",
+    }),
+]
+```
+
+### Connection Retries
+
+```python
+# inventory.py
+hosts = [
+    ("unreliable-host.net", {
+        "ssh_connect_retries": 3,
+        "ssh_connect_retry_min_delay": 1.0,
+        "ssh_connect_retry_max_delay": 5.0,
+    }),
+]
+```
+
+### Using SCP Instead of SFTP
+
+```python
+# inventory.py
+hosts = [
+    ("legacy-host.net", {
+        "ssh_file_transfer_protocol": "scp",
+    }),
+]
+```
+
+## Authentication Methods
+
+### SSH Agent (Recommended)
+
+Use SSH agent for secure key management:
+
+```shell
+# Start SSH agent and add key
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_rsa
+
+# Run pyinfra (will use agent)
+pyinfra inventory.py deploy.py
+```
+
+```python
+# inventory.py - agent is used by default
+hosts = [
+    ("host.example.com", {"ssh_user": "deploy"}),
+]
+```
+
+### SSH Key File
+
+Specify a private key file:
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_user": "deploy",
+        "ssh_key": "~/.ssh/deploy_key",
+    }),
+]
+```
+
+### Encrypted SSH Key
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_user": "deploy",
+        "ssh_key": "~/.ssh/encrypted_key",
+        "ssh_key_password": "key-password",
+    }),
+]
+```
+
+### Password Authentication (Not Recommended)
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_user": "deploy",
+        "ssh_password": "password",
+    }),
+]
+```
+
+<Warning>
+Password authentication is not recommended for production use. Use SSH keys with SSH agent instead.
+</Warning>
+
+## Host Key Verification
+
+Control how SSH host keys are verified:
+
+### Accept New Keys (Default)
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_strict_host_key_checking": "accept-new",
+    }),
+]
+```
+
+Accepts new hosts but verifies known hosts.
+
+### Strict Checking
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_strict_host_key_checking": "yes",
+    }),
+]
+```
+
+Rejects unknown hosts.
+
+### Disable Checking (Not Recommended)
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_strict_host_key_checking": "no",
+    }),
+]
+```
+
+<Warning>
+Disabling host key checking makes you vulnerable to man-in-the-middle attacks. Only use in trusted environments.
+</Warning>
+
+## Agent Forwarding
+
+Enable SSH agent forwarding to use local SSH keys on remote hosts:
+
+```python
+# inventory.py
+hosts = [
+    ("bastion.example.com", {
+        "ssh_forward_agent": True,
+    }),
+]
+```
+
+Useful for:
+- Accessing Git repositories from remote hosts
+- SSHing from one remote host to another
+- Using local credentials on remote systems
+
+## Advanced Configuration
+
+### Paramiko Connection Options
+
+Pass additional options to Paramiko:
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_paramiko_connect_kwargs": {
+            "timeout": 30,
+            "banner_timeout": 60,
+            "auth_timeout": 30,
+            "compress": True,
+        },
+    }),
+]
+```
+
+### Custom Known Hosts File
+
+```python
+# inventory.py
+hosts = [
+    ("host.example.com", {
+        "ssh_known_hosts_file": "/custom/path/known_hosts",
+    }),
+]
+```
+
+## Complete Example
+
+Here's a comprehensive inventory using SSH connector:
+
+```python
+# inventory.py
+from pyinfra import Inventory
+
+inventory = Inventory(
+    # Production servers
+    ([
+        ("web1.example.com", {
+            "ssh_user": "ubuntu",
+            "ssh_forward_agent": True,
+        }),
+        ("web2.example.com", {
+            "ssh_user": "ubuntu",
+            "ssh_forward_agent": True,
+        }),
+        ("db1.example.com", {
+            "ssh_user": "postgres",
+            "ssh_port": 2222,
+            "ssh_key": "~/.ssh/db_key",
+        }),
+    ], {
+        # Global SSH settings
+        "ssh_connect_retries": 3,
+        "ssh_strict_host_key_checking": "yes",
+    }),
+    
+    # Web servers group
+    webservers=([
+        "web1.example.com",
+        "web2.example.com",
+    ], {}),
+    
+    # Database servers group
+    databases=([
+        "db1.example.com",
+    ], {}),
+)
+```
+
+## File Transfer Methods
+
+The SSH connector supports two file transfer protocols:
+
+### SFTP (Default)
+
+Recommended for most use cases:
+- More reliable
+- Better error handling
+- Works with more SSH server configurations
+
+### SCP
+
+Useful for legacy systems:
+- Compatible with older SSH servers
+- Simpler protocol
+
+```python
+# inventory.py
+hosts = [
+    ("legacy-host", {
+        "ssh_file_transfer_protocol": "scp",
+    }),
+]
+```
+
+## Troubleshooting
+
+### Connection Timeouts
+
+Increase timeout and enable retries:
+
+```python
+hosts = [
+    ("slow-host.example.com", {
+        "ssh_connect_retries": 5,
+        "ssh_connect_retry_max_delay": 10.0,
+        "ssh_paramiko_connect_kwargs": {
+            "timeout": 60,
+        },
+    }),
+]
+```
+
+### Authentication Failures
+
+Enable verbose logging:
+
+```shell
+pyinfra -vv inventory.py deploy.py
+```
+
+Check:
+1. SSH key permissions (`chmod 600 ~/.ssh/id_rsa`)
+2. SSH agent is running (`ssh-add -l`)
+3. User has correct permissions on remote host
+4. SSH service is running on remote host
+
+### Host Key Verification Failed
+
+Update known_hosts:
+
+```shell
+ssh-keygen -R hostname
+ssh hostname  # Accept new key
+```
+
+## Source Reference
+
+Location: `src/pyinfra/connectors/ssh.py:119`
+
+### Key Methods
+
+- `connect()` - Establish SSH connection
+- `disconnect()` - Close SSH connection  
+- `run_shell_command()` - Execute commands via SSH
+- `put_file()` - Upload files via SFTP/SCP
+- `get_file()` - Download files via SFTP/SCP

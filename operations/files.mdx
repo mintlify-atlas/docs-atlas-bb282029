@@ -1,0 +1,367 @@
+---
+title: files
+description: Filesystem operations for file uploads, downloads, and management
+---
+
+The files operations handles filesystem state, file uploads and template generation.
+
+## Functions
+
+### `files.download`
+
+Download files from remote locations using `curl` or `wget`.
+
+```python
+files.download(
+    src,
+    dest,
+    user=None,
+    group=None,
+    mode=None,
+    cache_time=None,
+    force=False,
+    sha256sum=None,
+    headers=None,
+    insecure=False,
+)
+```
+
+<ParamField name="src" type="str" required>
+  Source URL of the file
+</ParamField>
+
+<ParamField name="dest" type="str" required>
+  Where to save the file
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  User to own the files
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  Group to own the files
+</ParamField>
+
+<ParamField name="mode" type="str" default="None">
+  Permissions of the files
+</ParamField>
+
+<ParamField name="cache_time" type="int" default="None">
+  If the file exists already, re-download after this time (in seconds)
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Always download the file, even if it already exists
+</ParamField>
+
+<ParamField name="sha256sum" type="str" default="None">
+  sha256 hash to checksum the downloaded file against
+</ParamField>
+
+### `files.put`
+
+Upload a local file, or file-like object, to the remote system.
+
+```python
+files.put(
+    src,
+    dest,
+    user=None,
+    group=None,
+    mode=None,
+    add_deploy_dir=True,
+    create_remote_dir=True,
+    force=False,
+)
+```
+
+<ParamField name="src" type="str | IO" required>
+  Filename or IO-like object to upload
+</ParamField>
+
+<ParamField name="dest" type="str" required>
+  Remote filename to upload to
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  User to own the files
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  Group to own the files
+</ParamField>
+
+<ParamField name="mode" type="int | str | bool" default="None">
+  Permissions of the files, use `True` to copy the local file
+</ParamField>
+
+<ParamField name="create_remote_dir" type="bool" default="True">
+  Create the remote directory if it doesn't exist
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Always upload the file, even if the remote copy matches
+</ParamField>
+
+### `files.template`
+
+Generate a template using jinja2 and write it to the remote system.
+
+```python
+files.template(
+    src,
+    dest,
+    user=None,
+    group=None,
+    mode=None,
+    create_remote_dir=True,
+    **data
+)
+```
+
+<ParamField name="src" type="str | IO" required>
+  Template filename or IO-like object
+</ParamField>
+
+<ParamField name="dest" type="str" required>
+  Remote filename
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  User to own the files
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  Group to own the files
+</ParamField>
+
+<ParamField name="mode" type="str" default="None">
+  Permissions of the files
+</ParamField>
+
+<ParamField name="**data">
+  Template variables (host, state, and inventory are automatically passed)
+</ParamField>
+
+### `files.line`
+
+Ensure lines in files using grep to locate and sed to replace.
+
+```python
+files.line(
+    path,
+    line,
+    present=True,
+    replace=None,
+    flags=None,
+    backup=False,
+)
+```
+
+<ParamField name="path" type="str" required>
+  Target remote file to edit
+</ParamField>
+
+<ParamField name="line" type="str" required>
+  String or regex matching the target line
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the line should be in the file
+</ParamField>
+
+<ParamField name="replace" type="str" default="None">
+  Text to replace entire matching lines when `present=True`
+</ParamField>
+
+<ParamField name="backup" type="bool" default="False">
+  Whether to backup the file (see below)
+</ParamField>
+
+### `files.replace`
+
+Replace contents of a file using `sed`.
+
+```python
+files.replace(
+    path,
+    text,
+    replace,
+    flags=None,
+    backup=False,
+)
+```
+
+<ParamField name="path" type="str" required>
+  Target remote file to edit
+</ParamField>
+
+<ParamField name="text" type="str" required>
+  Text/regex to match against
+</ParamField>
+
+<ParamField name="replace" type="str" required>
+  Text to replace with
+</ParamField>
+
+### `files.sync`
+
+Syncs a local directory with a remote one, with delete support.
+
+```python
+files.sync(
+    src,
+    dest,
+    user=None,
+    group=None,
+    mode=None,
+    dir_mode=None,
+    delete=False,
+    exclude=None,
+)
+```
+
+<ParamField name="src" type="str" required>
+  Local directory to sync
+</ParamField>
+
+<ParamField name="dest" type="str" required>
+  Remote directory to sync to
+</ParamField>
+
+<ParamField name="delete" type="bool" default="False">
+  Delete remote files not present locally
+</ParamField>
+
+<ParamField name="exclude" type="str | list" default="None">
+  String or list/tuple of strings to match & exclude files (eg `*.pyc`)
+</ParamField>
+
+### `files.directory`
+
+Add/remove/update directories.
+
+```python
+files.directory(
+    path,
+    present=True,
+    user=None,
+    group=None,
+    mode=None,
+    recursive=False,
+)
+```
+
+<ParamField name="path" type="str" required>
+  Path of the remote folder
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the folder should exist
+</ParamField>
+
+<ParamField name="recursive" type="bool" default="False">
+  Recursively apply user/group/mode
+</ParamField>
+
+### `files.file`
+
+Add/remove files.
+
+```python
+files.file(
+    path,
+    present=True,
+    user=None,
+    group=None,
+    mode=None,
+    touch=False,
+)
+```
+
+<ParamField name="path" type="str" required>
+  Path of the remote file
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the file should exist
+</ParamField>
+
+<ParamField name="touch" type="bool" default="False">
+  Whether to touch the file
+</ParamField>
+
+### `files.link`
+
+Add/remove/update links.
+
+```python
+files.link(
+    path,
+    target=None,
+    present=True,
+    user=None,
+    group=None,
+    symbolic=True,
+)
+```
+
+<ParamField name="path" type="str" required>
+  The name of the link
+</ParamField>
+
+<ParamField name="target" type="str" default="None">
+  The file/directory the link points to
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the link should exist
+</ParamField>
+
+<ParamField name="symbolic" type="bool" default="True">
+  Whether to make a symbolic link (vs hard link)
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import files
+
+# Download a file
+files.download(
+    name="Download the Docker repo file",
+    src="https://download.docker.com/linux/centos/docker-ce.repo",
+    dest="/etc/yum.repos.d/docker-ce.repo",
+)
+
+# Upload a file
+files.put(
+    name="Update the message of the day file",
+    src="files/motd",
+    dest="/etc/motd",
+    mode="644",
+)
+
+# Create a templated file
+files.template(
+    name="Create a templated file",
+    src="templates/somefile.conf.j2",
+    dest="/etc/somefile.conf",
+)
+
+# Ensure a line in a file
+files.line(
+    name="Add the down-for-maintenance line in /etc/motd",
+    path="/etc/motd",
+    line="SYSTEM IS DOWN FOR MAINTENANCE",
+)
+
+# Create a directory
+files.directory(
+    name="Ensure /opt/myapp exists",
+    path="/opt/myapp",
+    mode="755",
+    user="www-data",
+    group="www-data",
+)
+```

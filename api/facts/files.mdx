@@ -1,0 +1,514 @@
+---
+title: File Facts
+description: Gather filesystem information from target hosts
+---
+
+File facts provide information about files, directories, and filesystem contents on target hosts.
+
+## File Information
+
+### File
+
+Get detailed information about a single file or directory:
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import File
+
+file_info = host.get_fact(File, path="/etc/hosts")
+
+if file_info:
+    print(f"Size: {file_info['size']} bytes")
+    print(f"Owner: {file_info['user']}:{file_info['group']}")
+    print(f"Mode: {file_info['mode']}")
+    print(f"Modified: {file_info['mtime']}")
+else:
+    print("File does not exist")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to file or directory
+
+**Returns:** `dict | None` - File information or None if file doesn't exist
+
+**Dict keys:**
+- `user` (str) - Owner username
+- `group` (str) - Group name
+- `mode` (int) - Permissions as octal (e.g., 755)
+- `size` (int) - File size in bytes
+- `mtime` (datetime | None) - Modification time
+- `atime` (datetime | None) - Access time
+- `ctime` (datetime | None) - Change time
+- `type` (str) - File type: "file", "directory", "link", "block", "character", "socket", "fifo"
+- `link_target` (str | None) - Target path for symbolic links
+
+### Directory
+
+Get list of files in a directory:
+
+```python
+from pyinfra.facts.files import Directory
+
+files = host.get_fact(Directory, path="/etc/nginx")
+
+if files:
+    print(f"Files in /etc/nginx: {', '.join(files)}")
+    for filename in files:
+        print(f"  - {filename}")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to directory
+
+**Returns:** `list[str] | None` - List of filenames, or None if directory doesn't exist
+
+<Note>
+Returns just filenames, not full paths. Use `os.path.join()` to build full paths.
+</Note>
+
+### Link
+
+Get the target of a symbolic link:
+
+```python
+from pyinfra.facts.files import Link
+
+target = host.get_fact(Link, path="/usr/bin/python")
+
+if target:
+    print(f"Link points to: {target}")
+    # Returns: "/usr/bin/python3.10"
+```
+
+**Parameters:**
+- `path` (str, required) - Path to symbolic link
+
+**Returns:** `str | None` - Target path, or None if not a link or doesn't exist
+
+## File Contents
+
+### FindInFile
+
+Search for a pattern in a file:
+
+```python
+from pyinfra.facts.files import FindInFile
+
+# Search for pattern
+matches = host.get_fact(
+    FindInFile,
+    path="/etc/ssh/sshd_config",
+    pattern="PermitRootLogin",
+)
+
+if matches:
+    for line in matches:
+        print(f"Found: {line}")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to file
+- `pattern` (str, required) - Pattern to search for (plain text or regex)
+
+**Returns:** `list[str] | None` - Matching lines, or None if file doesn't exist
+
+### FindFiles
+
+Find files matching a pattern:
+
+```python
+from pyinfra.facts.files import FindFiles
+
+# Find all .conf files
+conf_files = host.get_fact(
+    FindFiles,
+    path="/etc/nginx",
+    pattern="*.conf",
+)
+
+for file_path in conf_files:
+    print(f"Found config: {file_path}")
+```
+
+**Parameters:**
+- `path` (str, required) - Directory to search in
+- `pattern` (str, required) - Filename pattern (glob style)
+
+**Returns:** `list[str]` - List of matching file paths
+
+### FindLinks
+
+Find symbolic links in a directory:
+
+```python
+from pyinfra.facts.files import FindLinks
+
+links = host.get_fact(FindLinks, path="/usr/bin")
+
+for link_path in links:
+    print(f"Link: {link_path}")
+```
+
+**Parameters:**
+- `path` (str, required) - Directory to search
+
+**Returns:** `list[str]` - List of symbolic link paths
+
+### FindDirectories
+
+Find subdirectories:
+
+```python
+from pyinfra.facts.files import FindDirectories
+
+dirs = host.get_fact(FindDirectories, path="/var/log")
+
+for dir_path in dirs:
+    print(f"Directory: {dir_path}")
+```
+
+**Parameters:**
+- `path` (str, required) - Directory to search
+
+**Returns:** `list[str]` - List of subdirectory paths
+
+## File Hashes
+
+### Sha1File
+
+Get SHA1 hash of a file:
+
+```python
+from pyinfra.facts.files import Sha1File
+
+sha1 = host.get_fact(Sha1File, path="/etc/hosts")
+print(f"SHA1: {sha1}")
+# Returns: "a1b2c3d4e5f6..."
+```
+
+**Parameters:**
+- `path` (str, required) - Path to file
+
+**Returns:** `str | None` - SHA1 hash, or None if file doesn't exist
+
+### Sha256File
+
+Get SHA256 hash of a file:
+
+```python
+from pyinfra.facts.files import Sha256File
+
+sha256 = host.get_fact(Sha256File, path="/etc/hosts")
+print(f"SHA256: {sha256}")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to file
+
+**Returns:** `str | None` - SHA256 hash, or None if file doesn't exist
+
+### Md5File
+
+Get MD5 hash of a file:
+
+```python
+from pyinfra.facts.files import Md5File
+
+md5 = host.get_fact(Md5File, path="/etc/hosts")
+print(f"MD5: {md5}")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to file
+
+**Returns:** `str | None` - MD5 hash, or None if file doesn't exist
+
+## File System
+
+### BlockDevices
+
+Get list of block devices:
+
+```python
+from pyinfra.facts.files import BlockDevices
+
+devices = host.get_fact(BlockDevices)
+
+for device in devices:
+    print(f"Device: {device}")
+    # Returns: "/dev/sda", "/dev/sdb", etc.
+```
+
+**Returns:** `list[str]` - List of block device paths
+
+### DiskUsage
+
+Get disk usage information:
+
+```python
+from pyinfra.facts.files import DiskUsage
+
+usage = host.get_fact(DiskUsage, path="/")
+
+print(f"Filesystem: {usage['filesystem']}")
+print(f"Size: {usage['size']}")
+print(f"Used: {usage['used']}")
+print(f"Available: {usage['available']}")
+print(f"Use%: {usage['used_percent']}")
+print(f"Mounted on: {usage['mounted_on']}")
+```
+
+**Parameters:**
+- `path` (str, required) - Path to check (file or directory)
+
+**Returns:** `dict` - Disk usage information
+
+**Dict keys:**
+- `filesystem` (str) - Filesystem device
+- `size` (int) - Total size in bytes
+- `used` (int) - Used space in bytes
+- `available` (int) - Available space in bytes
+- `used_percent` (int) - Percentage used
+- `mounted_on` (str) - Mount point
+
+## Usage Examples
+
+### Check File Exists Before Creating
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import File
+from pyinfra.operations import files
+
+config_file = host.get_fact(File, path="/etc/myapp/config.ini")
+
+if not config_file:
+    files.put(
+        name="Upload config",
+        src="config.ini",
+        dest="/etc/myapp/config.ini",
+    )
+else:
+    host.noop("Config file already exists")
+```
+
+### Check File Permissions
+
+```python
+from pyinfra.facts.files import File
+from pyinfra.operations import files
+
+file_info = host.get_fact(File, path="/etc/app/secret.key")
+
+if file_info and file_info["mode"] != 600:
+    files.file(
+        name="Fix secret.key permissions",
+        path="/etc/app/secret.key",
+        mode="600",
+    )
+```
+
+### Find and Process Config Files
+
+```python
+from pyinfra.facts.files import FindFiles, File
+from pyinfra.operations import files
+
+# Find all config files
+config_files = host.get_fact(
+    FindFiles,
+    path="/etc/nginx/sites-enabled",
+    pattern="*.conf",
+)
+
+# Check each one
+for config_path in config_files:
+    file_info = host.get_fact(File, path=config_path)
+    
+    if file_info["user"] != "www-data":
+        files.file(
+            name=f"Fix owner of {config_path}",
+            path=config_path,
+            user="www-data",
+            group="www-data",
+        )
+```
+
+### Search Config Files
+
+```python
+from pyinfra.facts.files import FindInFile
+from pyinfra.operations import files
+
+# Check if debug mode is enabled
+matches = host.get_fact(
+    FindInFile,
+    path="/etc/myapp/config.ini",
+    pattern="^debug=true",
+)
+
+if matches:
+    # Disable debug mode
+    files.line(
+        name="Disable debug mode",
+        path="/etc/myapp/config.ini",
+        line="debug=true",
+        replace="debug=false",
+    )
+```
+
+### Check Disk Space
+
+```python
+from pyinfra.facts.files import DiskUsage
+
+usage = host.get_fact(DiskUsage, path="/var/log")
+
+if usage["used_percent"] > 80:
+    print(f"⚠️  Warning: /var/log is {usage['used_percent']}% full")
+    # Maybe clean up old logs
+```
+
+### Verify File Hash
+
+```python
+from pyinfra.facts.files import Sha256File
+from pyinfra.operations import files
+
+expected_hash = "abc123def456..."
+actual_hash = host.get_fact(Sha256File, path="/opt/app/binary")
+
+if actual_hash != expected_hash:
+    files.download(
+        name="Download correct binary",
+        src="https://example.com/app/binary",
+        dest="/opt/app/binary",
+    )
+```
+
+### List Directory Contents
+
+```python
+from pyinfra.facts.files import Directory
+
+files = host.get_fact(Directory, path="/etc/nginx/sites-enabled")
+
+if files:
+    print(f"Found {len(files)} enabled sites:")
+    for filename in files:
+        print(f"  - {filename}")
+else:
+    print("Directory doesn't exist or is empty")
+```
+
+## Complete Example
+
+Here's a comprehensive example using file facts:
+
+```python
+from pyinfra import host
+from pyinfra.facts.files import (
+    File,
+    Directory,
+    FindInFile,
+    DiskUsage,
+    Sha256File,
+)
+from pyinfra.operations import files
+
+# Check if application directory exists
+app_dir = host.get_fact(File, path="/opt/myapp")
+
+if not app_dir:
+    files.directory(
+        name="Create app directory",
+        path="/opt/myapp",
+        user="myapp",
+        group="myapp",
+        mode="755",
+    )
+elif app_dir["type"] != "directory":
+    print("⚠️  Error: /opt/myapp exists but is not a directory")
+    exit(1)
+
+# Check disk space
+usage = host.get_fact(DiskUsage, path="/opt")
+if usage["used_percent"] > 90:
+    print(f"⚠️  Critical: /opt is {usage['used_percent']}% full")
+    exit(1)
+
+# Verify application binary
+expected_hash = "abc123..."
+actual_hash = host.get_fact(Sha256File, path="/opt/myapp/bin/myapp")
+
+if actual_hash != expected_hash:
+    print("Updating application binary")
+    files.put(
+        name="Upload new binary",
+        src="dist/myapp",
+        dest="/opt/myapp/bin/myapp",
+        mode="755",
+    )
+
+# Check configuration
+config_file = host.get_fact(File, path="/etc/myapp/config.ini")
+
+if not config_file:
+    files.template(
+        name="Create config",
+        src="templates/config.ini.j2",
+        dest="/etc/myapp/config.ini",
+        mode="640",
+        user="myapp",
+        group="myapp",
+    )
+else:
+    # Verify config permissions
+    if config_file["mode"] != 640:
+        files.file(
+            name="Fix config permissions",
+            path="/etc/myapp/config.ini",
+            mode="640",
+        )
+    
+    # Check for insecure settings
+    debug_enabled = host.get_fact(
+        FindInFile,
+        path="/etc/myapp/config.ini",
+        pattern="^debug=true",
+    )
+    
+    if debug_enabled:
+        print("⚠️  Warning: Debug mode is enabled in production")
+
+# List log files
+log_files = host.get_fact(Directory, path="/var/log/myapp")
+
+if log_files:
+    print(f"Found {len(log_files)} log files")
+    
+    # Check each log file size
+    for log_file in log_files:
+        log_path = f"/var/log/myapp/{log_file}"
+        log_info = host.get_fact(File, path=log_path)
+        
+        # Warn about large log files
+        if log_info and log_info["size"] > 100 * 1024 * 1024:  # 100 MB
+            print(f"⚠️  Large log file: {log_file} ({log_info['size'] // 1024 // 1024} MB)")
+
+print("✓ Application deployment verified")
+```
+
+## Source Reference
+
+Location: `src/pyinfra/facts/files.py`
+
+### Key Facts
+
+- `File` - Get file information (line 138+)
+- `Directory` - List directory contents
+- `Link` - Get symlink target
+- `FindInFile` - Search file contents
+- `FindFiles` - Find files by pattern
+- `Sha256File` - Get file hash
+- `DiskUsage` - Get disk usage

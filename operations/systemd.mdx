@@ -1,0 +1,114 @@
+---
+title: systemd
+description: Manage systemd services on Linux systems
+---
+
+Manage systemd services.
+
+## Functions
+
+### `systemd.daemon_reload`
+
+Reload the systemd daemon to read unit file changes.
+
+```python
+systemd.daemon_reload(
+    user_mode=False,
+    machine=None,
+    user_name=None,
+)
+```
+
+<ParamField name="user_mode" type="bool" default="False">
+  Whether to use per-user systemd (systemctl --user) or not
+</ParamField>
+
+<ParamField name="machine" type="str" default="None">
+  The machine name to connect to
+</ParamField>
+
+<ParamField name="user_name" type="str" default="None">
+  Connect to a specific user's systemd session
+</ParamField>
+
+### `systemd.service`
+
+Manage the state of systemd managed units.
+
+```python
+systemd.service(
+    service,
+    running=True,
+    restarted=False,
+    reloaded=False,
+    command=None,
+    enabled=None,
+    daemon_reload=False,
+    user_mode=False,
+    machine=None,
+    user_name=None,
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the systemd unit to manage
+</ParamField>
+
+<ParamField name="running" type="bool" default="True">
+  Whether the unit should be running
+</ParamField>
+
+<ParamField name="restarted" type="bool" default="False">
+  Whether the unit should be restarted
+</ParamField>
+
+<ParamField name="reloaded" type="bool" default="False">
+  Whether the unit should be reloaded
+</ParamField>
+
+<ParamField name="command" type="str" default="None">
+  Custom command to pass like: `/etc/rc.d/<name> <command>`
+</ParamField>
+
+<ParamField name="enabled" type="bool" default="None">
+  Whether this unit should be enabled/disabled on boot
+</ParamField>
+
+<ParamField name="daemon_reload" type="bool" default="False">
+  Reload the systemd daemon to read updated unit files
+</ParamField>
+
+<ParamField name="user_mode" type="bool" default="False">
+  Whether to use per-user systemd (systemctl --user) or not
+</ParamField>
+
+<ParamField name="machine" type="str" default="None">
+  The machine name to connect to
+</ParamField>
+
+<ParamField name="user_name" type="str" default="None">
+  Connect to a specific user's systemd session
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import systemd
+
+# Restart and enable the dnsmasq service
+systemd.service(
+    name="Restart and enable the dnsmasq service",
+    service="dnsmasq.service",
+    running=True,
+    restarted=True,
+    enabled=True,
+)
+
+# Enable logrotate timer
+systemd.service(
+    name="Enable logrotate timer",
+    service="logrotate.timer",
+    running=True,
+    enabled=True,
+)
+```

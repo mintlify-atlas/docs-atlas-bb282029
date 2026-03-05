@@ -1,0 +1,547 @@
+---
+title: Commands
+description: Command types for executing operations on remote hosts
+---
+
+pyinfra provides several command types for different operations: shell commands, file transfers, Python functions, and rsync operations.
+
+## StringCommand
+
+Execute shell commands with automatic escaping and formatting.
+
+```python
+from pyinfra.api import StringCommand, QuoteString, MaskString
+
+# Simple command
+cmd = StringCommand("echo", "Hello World")
+
+# With quoted arguments (safe from injection)
+cmd = StringCommand("rm", QuoteString(user_input))
+
+# With masked passwords
+cmd = StringCommand("mysql", "-p", MaskString(password))
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    *bits,
+    _separator=" ",
+    **arguments
+):
+    """Create a string command.
+    
+    Args:
+        *bits: Command parts (strings, QuoteString, or nested StringCommands)
+        _separator: Separator between parts (default: space)
+        **arguments: Connector arguments (sudo, su, etc.)
+    """
+```
+
+<ParamField path="*bits" type="str | QuoteString | MaskString | StringCommand" required>
+  Command parts to join together.
+</ParamField>
+
+<ParamField path="_separator" type="str" default="  ">
+  String to use between parts.
+</ParamField>
+
+<ParamField path="**arguments" type="ConnectorArguments" optional>
+  Execution arguments like `_sudo`, `_su_user`, etc.
+</ParamField>
+
+### Methods
+
+<ResponseField name="get_raw_value()" type="str">
+  Get the raw command string (including masked values).
+</ResponseField>
+
+<ResponseField name="get_masked_value()" type="str">
+  Get the command string with masked values replaced by `***`.
+</ResponseField>
+
+### Usage in Operations
+
+```python
+from pyinfra.api import operation, StringCommand, QuoteString
+
+@operation()
+def create_file(path: str, content: str):
+    # Safe from shell injection
+    yield StringCommand(
+        "echo",
+        QuoteString(content),
+        ">",
+        QuoteString(path)
+    )
+```
+
+### QuoteString Helper
+
+Automatically quote and escape arguments:
+
+```python
+from pyinfra.api import QuoteString
+
+# Safely handle user input
+user_path = "/path/with spaces/file.txt"
+cmd = StringCommand("ls", QuoteString(user_path))
+# Result: ls '/path/with spaces/file.txt'
+
+# Prevent shell injection
+malicious = "test; rm -rf /"
+cmd = StringCommand("echo", QuoteString(malicious))
+# Result: echo 'test; rm -rf /'
+```
+
+### MaskString Helper
+
+Hide sensitive values in logs:
+
+```python
+from pyinfra.api import MaskString
+
+password = "secret123"
+cmd = StringCommand("mysql", "-p", MaskString(password))
+
+# In logs: mysql -p ***
+# Actual command: mysql -p secret123
+```
+
+### Formatted Commands
+
+Use `make_formatted_string_command()` for complex formatting:
+
+```python
+from pyinfra.api.command import make_formatted_string_command, QuoteString
+
+curl_cmd = make_formatted_string_command(
+    'curl -sSLf {0} -o {1}',
+    QuoteString("https://example.com/file.tar.gz"),
+    QuoteString("/tmp/file.tar.gz"),
+)
+```
+
+## FileUploadCommand
+
+Upload files or file-like objects to remote hosts.
+
+```python
+from pyinfra.api import FileUploadCommand
+from io import StringIO
+
+# Upload from file path
+cmd = FileUploadCommand(
+    src="local/config.txt",
+    dest="/etc/app/config.txt",
+)
+
+# Upload from file-like object
+config_io = StringIO("port=8000\nhost=0.0.0.0")
+cmd = FileUploadCommand(
+    src=config_io,
+    dest="/etc/app/config.txt",
+)
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    src: str | IO,
+    dest: str,
+    remote_temp_filename: str = None,
+    **kwargs
+):
+    """Create a file upload command.
+    
+    Args:
+        src: Local file path or file-like object
+        dest: Remote destination path
+        remote_temp_filename: Optional temp filename on remote
+        **kwargs: Connector arguments
+    """
+```
+
+<ParamField path="src" type="str | IO" required>
+  Source file path or file-like object to upload.
+</ParamField>
+
+<ParamField path="dest" type="str" required>
+  Destination path on remote host.
+</ParamField>
+
+<ParamField path="remote_temp_filename" type="str" optional>
+  Temporary filename to use on remote host during upload.
+</ParamField>
+
+### Usage in Operations
+
+```python
+from pyinfra.api import operation, FileUploadCommand
+from io import StringIO
+
+@operation()
+def deploy_config(config_content: str):
+    # Upload generated content
+    config_io = StringIO(config_content)
+    yield FileUploadCommand(
+        src=config_io,
+        dest="/etc/myapp/config.ini",
+        _sudo=True,
+    )
+    
+    # Upload local file
+    yield FileUploadCommand(
+        src="templates/service.conf",
+        dest="/etc/systemd/system/myapp.service",
+        _sudo=True,
+    )
+```
+
+## FileDownloadCommand
+
+Download files from remote hosts.
+
+```python
+from pyinfra.api import FileDownloadCommand
+
+# Download to local file
+cmd = FileDownloadCommand(
+    src="/var/log/app.log",
+    dest="logs/app.log",
+)
+
+# Download to file-like object
+from io import BytesIO
+log_buffer = BytesIO()
+cmd = FileDownloadCommand(
+    src="/var/log/app.log",
+    dest=log_buffer,
+)
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    src: str,
+    dest: str | IO,
+    remote_temp_filename: str = None,
+    **kwargs
+):
+    """Create a file download command.
+    
+    Args:
+        src: Remote source path
+        dest: Local destination path or file-like object
+        remote_temp_filename: Optional temp filename
+        **kwargs: Connector arguments
+    """
+```
+
+<ParamField path="src" type="str" required>
+  Source path on remote host.
+</ParamField>
+
+<ParamField path="dest" type="str | IO" required>
+  Local destination path or file-like object.
+</ParamField>
+
+### Usage in Operations
+
+```python
+from pyinfra.api import operation, FileDownloadCommand
+
+@operation()
+def backup_logs():
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    yield FileDownloadCommand(
+        src="/var/log/app.log",
+        dest=f"backups/app_{timestamp}.log",
+    )
+```
+
+## FunctionCommand
+
+Execute Python functions on remote hosts.
+
+```python
+from pyinfra.api import FunctionCommand
+
+def my_callback():
+    print("This runs during operation execution")
+
+cmd = FunctionCommand(
+    function=my_callback,
+    args=(),
+    func_kwargs={},
+)
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    function: Callable,
+    args: tuple,
+    func_kwargs: dict,
+    **kwargs
+):
+    """Create a function command.
+    
+    Args:
+        function: Python function to execute
+        args: Positional arguments for function
+        func_kwargs: Keyword arguments for function
+        **kwargs: Connector arguments
+    """
+```
+
+<ParamField path="function" type="Callable" required>
+  Python function to execute.
+</ParamField>
+
+<ParamField path="args" type="tuple" required>
+  Positional arguments to pass to the function.
+</ParamField>
+
+<ParamField path="func_kwargs" type="dict" required>
+  Keyword arguments to pass to the function.
+</ParamField>
+
+### Function Signatures
+
+Functions can optionally accept `state` and `host` parameters:
+
+```python
+def with_context(state, host, *args, **kwargs):
+    """Function with access to state and host."""
+    print(f"Running on {host.name}")
+    # Can use state and host here
+
+def without_context(arg1, arg2):
+    """Regular function without state/host."""
+    print(f"Args: {arg1}, {arg2}")
+```
+
+### Usage in Operations
+
+```python
+from pyinfra.api import operation, FunctionCommand
+
+def log_completion(message: str):
+    with open("/tmp/deploy.log", "a") as f:
+        f.write(f"{message}\n")
+
+@operation()
+def deploy_with_logging():
+    yield "echo 'Starting deploy'"
+    
+    # Execute Python function mid-operation
+    yield FunctionCommand(
+        function=log_completion,
+        args=("Deploy step 1 complete",),
+        func_kwargs={},
+    )
+    
+    yield "echo 'Finishing deploy'"
+```
+
+## RsyncCommand
+
+Sync files using rsync (if supported by connector).
+
+```python
+from pyinfra.api import RsyncCommand
+
+cmd = RsyncCommand(
+    src="local/website/",
+    dest="/var/www/html/",
+    flags=["-avz", "--delete"],
+)
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    src: str,
+    dest: str,
+    flags: list[str],
+    **kwargs
+):
+    """Create an rsync command.
+    
+    Args:
+        src: Source path (local or remote)
+        dest: Destination path (local or remote)
+        flags: List of rsync flags
+        **kwargs: Connector arguments
+    """
+```
+
+<ParamField path="src" type="str" required>
+  Source directory path.
+</ParamField>
+
+<ParamField path="dest" type="str" required>
+  Destination directory path.
+</ParamField>
+
+<ParamField path="flags" type="list[str]" required>
+  List of rsync flags (e.g., `["-avz", "--delete"]`).
+</ParamField>
+
+### Usage in Operations
+
+```python
+from pyinfra.api import operation, RsyncCommand
+from pyinfra import host
+
+@operation()
+def sync_website():
+    # Check if host supports rsync
+    host.check_can_rsync()
+    
+    # Sync files
+    yield RsyncCommand(
+        src="website/dist/",
+        dest="/var/www/html/",
+        flags=[
+            "-avz",          # Archive, verbose, compress
+            "--delete",      # Delete extraneous files
+            "--exclude",     # Exclude patterns
+            ".git",
+        ],
+    )
+```
+
+## Complete Example
+
+Here's a complete operation using various command types:
+
+```python
+from pyinfra.api import (
+    operation,
+    StringCommand,
+    QuoteString,
+    MaskString,
+    FileUploadCommand,
+    FileDownloadCommand,
+    FunctionCommand,
+    RsyncCommand,
+)
+from pyinfra import host
+from io import StringIO
+import datetime
+
+def log_deployment(app_name: str):
+    """Log deployment to file."""
+    timestamp = datetime.datetime.now().isoformat()
+    with open("/var/log/deployments.log", "a") as f:
+        f.write(f"{timestamp} - Deployed {app_name}\n")
+
+@operation()
+def deploy_application(
+    app_name: str,
+    db_password: str,
+    sync_files: bool = True,
+):
+    """Complete application deployment."""
+    
+    # 1. Create application directory
+    yield StringCommand(
+        "mkdir", "-p",
+        QuoteString(f"/opt/{app_name}")
+    )
+    
+    # 2. Generate and upload config
+    config_content = f"""
+    app_name={app_name}
+    db_host=localhost
+    db_password={db_password}
+    """
+    config_io = StringIO(config_content)
+    yield FileUploadCommand(
+        src=config_io,
+        dest=f"/opt/{app_name}/config.ini",
+        _sudo=True,
+    )
+    
+    # 3. Set database password (masked in logs)
+    yield StringCommand(
+        "mysql", "-p", MaskString(db_password),
+        "-e", QuoteString(f"CREATE DATABASE IF NOT EXISTS {app_name}")
+    )
+    
+    # 4. Sync application files if requested
+    if sync_files:
+        host.check_can_rsync()
+        yield RsyncCommand(
+            src=f"builds/{app_name}/",
+            dest=f"/opt/{app_name}/",
+            flags=["-avz", "--delete"],
+        )
+    
+    # 5. Set permissions
+    yield StringCommand(
+        "chown", "-R",
+        f"{app_name}:{app_name}",
+        QuoteString(f"/opt/{app_name}")
+    )
+    
+    # 6. Start application
+    yield StringCommand(
+        "systemctl", "restart",
+        QuoteString(f"{app_name}.service")
+    )
+    
+    # 7. Download logs for verification
+    yield FileDownloadCommand(
+        src=f"/opt/{app_name}/startup.log",
+        dest=f"logs/{app_name}_startup.log",
+    )
+    
+    # 8. Log deployment
+    yield FunctionCommand(
+        function=log_deployment,
+        args=(app_name,),
+        func_kwargs={},
+    )
+
+# Usage
+deploy_application(
+    app_name="myapp",
+    db_password="secret123",
+    sync_files=True,
+    _sudo=True,
+)
+```
+
+## Source Reference
+
+Location: `src/pyinfra/api/command.py`
+
+### Key Classes
+
+- `PyinfraCommand` - Base command class (line 66)
+- `StringCommand` - Shell commands (line 82)
+- `FileUploadCommand` - File uploads (line 150)
+- `FileDownloadCommand` - File downloads (line 181)
+- `FunctionCommand` - Python functions (line 212)
+- `RsyncCommand` - Rsync operations (line 260)
+- `QuoteString` - Quote helper (line 55)
+- `MaskString` - Mask helper (line 51)
+
+### Helper Functions
+
+- `make_formatted_string_command()` - Create formatted commands (line 20)

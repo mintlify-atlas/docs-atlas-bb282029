@@ -1,0 +1,604 @@
+---
+title: Inventory and Data
+description: Master pyinfra's inventory system to manage hosts, groups, and configuration data
+---
+
+Inventory is how you tell pyinfra which hosts to target and what configuration data to use. This guide covers everything from simple host lists to complex multi-environment setups with groups and data hierarchies.
+
+## What is Inventory?
+
+Inventory in pyinfra consists of:
+- **Hosts** - Target machines (SSH servers, Docker containers, local machine)
+- **Groups** - Logical collections of hosts (web servers, databases, etc.)
+- **Data** - Configuration values that can be assigned to hosts, groups, or globally
+
+## Basic Inventory
+
+### Simple Host List
+
+The simplest inventory is a list of hostnames:
+
+```python inventory.py
+targets = [
+    "web-01.example.com",
+    "web-02.example.com",
+    "db-01.example.com",
+]
+```
+
+### Hosts with Connection Parameters
+
+Configure SSH connection settings per host:
+
+```python inventory.py
+targets = [
+    # Simple hostname
+    "web-01.example.com",
+    
+    # Hostname with custom SSH settings
+    ("web-02.example.com", {
+        "ssh_user": "deploy",
+        "ssh_port": 2222,
+        "ssh_key": "~/.ssh/deploy_key",
+    }),
+    
+    # Local machine
+    "@local",
+    
+    # Docker container
+    "@docker/ubuntu:22.04",
+]
+```
+
+<Note>
+  The tuple format `(hostname, {config})` allows you to specify connection parameters for individual hosts.
+</Note>
+
+## Using Connectors
+
+pyinfra supports multiple connectors for different target types:
+
+<CodeGroup>
+```python SSH (Default)
+# Default connector - SSH to remote hosts
+targets = [
+    "server.example.com",
+    ("192.168.1.10", {
+        "ssh_user": "ubuntu",
+        "ssh_port": 22,
+        "ssh_key": "~/.ssh/id_rsa",
+    }),
+]
+```
+
+```python Local
+# Execute on local machine
+targets = ["@local"]
+```
+
+```python Docker
+# Execute in Docker containers
+targets = [
+    "@docker/ubuntu:22.04",
+    "@docker/nginx:alpine",
+    "@docker/container-id-or-name",
+]
+```
+
+```python Multiple Connectors
+# Mix different connector types
+targets = [
+    "@local",
+    "production-server.com",
+    "@docker/ubuntu:22.04",
+]
+```
+</CodeGroup>
+
+## Groups
+
+Groups organize hosts into logical collections:
+
+```python inventory.py
+# Define groups
+web_servers = [
+    "web-01.example.com",
+    "web-02.example.com",
+    "web-03.example.com",
+]
+
+db_servers = [
+    ("db-01.example.com", {
+        "ssh_user": "postgres",
+    }),
+    "db-02.example.com",
+]
+
+load_balancers = [
+    "lb-01.example.com",
+]
+
+# All hosts
+targets = web_servers + db_servers + load_balancers
+```
+
+### Targeting Specific Groups
+
+Use groups in your deploy files for conditional logic:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files
+
+# Install nginx only on web servers
+if "web_servers" in host.groups:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+    
+    files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/nginx.conf",
+        _sudo=True,
+    )
+
+# Install PostgreSQL only on database servers
+if "db_servers" in host.groups:
+    apt.packages(
+        name="Install PostgreSQL",
+        packages=["postgresql", "postgresql-contrib"],
+        _sudo=True,
+    )
+```
+
+## Working with Data
+
+Data allows you to inject configuration values into your deploys.
+
+### Global Data
+
+Data available to all hosts:
+
+```python inventory.py
+targets = [
+    "web-01.example.com",
+    "web-02.example.com",
+]
+
+# Global data available to all hosts
+app_name = "myapp"
+app_version = "1.2.3"
+app_port = 8000
+```
+
+Access in deploy:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import server
+
+server.shell(
+    name=f"Deploy {host.data.app_name} v{host.data.app_version}",
+    commands=[
+        f"echo 'Deploying {host.data.app_name}'",
+    ],
+)
+```
+
+### Group Data
+
+Data specific to a group of hosts:
+
+```python inventory.py
+web_servers = [
+    "web-01.example.com",
+    "web-02.example.com",
+]
+
+db_servers = [
+    "db-01.example.com",
+]
+
+# Group data
+web_servers_data = {
+    "nginx_workers": 4,
+    "nginx_port": 80,
+    "app_port": 8000,
+}
+
+db_servers_data = {
+    "postgres_version": "14",
+    "postgres_max_connections": 200,
+}
+
+targets = web_servers + db_servers
+```
+
+Access group-specific data:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import files
+
+if "web_servers" in host.groups:
+    files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/nginx.conf",
+        workers=host.data.get("nginx_workers", 2),
+        port=host.data.get("nginx_port", 80),
+        _sudo=True,
+    )
+```
+
+### Host Data
+
+Data specific to individual hosts:
+
+```python inventory.py
+targets = [
+    ("web-01.example.com", {
+        "ssh_user": "deploy",
+        "server_id": 1,
+        "memory_limit": "4GB",
+    }),
+    ("web-02.example.com", {
+        "ssh_user": "deploy",
+        "server_id": 2,
+        "memory_limit": "8GB",
+    }),
+]
+```
+
+Access host-specific data:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import files
+
+files.template(
+    name="Configure application",
+    src="templates/app.conf.j2",
+    dest="/etc/myapp/config.conf",
+    server_id=host.data.server_id,
+    memory_limit=host.data.memory_limit,
+)
+```
+
+## Data Precedence
+
+Data is resolved in order of specificity:
+
+1. **Host data** (highest priority)
+2. **Group data**
+3. **Global data** (lowest priority)
+
+```python inventory.py
+# Global data
+app_port = 8000
+
+web_servers = [
+    ("web-01.example.com", {
+        "app_port": 8001,  # Host data - highest priority
+    }),
+    "web-02.example.com",  # Will use group or global data
+]
+
+# Group data
+web_servers_data = {
+    "app_port": 8080,  # Group data - medium priority
+}
+```
+
+<Note>
+  Host data overrides group data, which overrides global data. Use this hierarchy to set defaults globally and override where needed.
+</Note>
+
+## Advanced Inventory Patterns
+
+### Multiple Environments
+
+Create separate inventory files for each environment:
+
+<CodeGroup>
+```python inventory/production.py
+web_servers = [
+    "web-01.prod.example.com",
+    "web-02.prod.example.com",
+]
+
+db_servers = [
+    "db-01.prod.example.com",
+]
+
+environment = "production"
+app_port = 8000
+debug = False
+
+targets = web_servers + db_servers
+```
+
+```python inventory/staging.py
+web_servers = [
+    "web-01.staging.example.com",
+]
+
+db_servers = [
+    "db-01.staging.example.com",
+]
+
+environment = "staging"
+app_port = 8000
+debug = True
+
+targets = web_servers + db_servers
+```
+
+```python inventory/development.py
+targets = ["@local"]
+
+environment = "development"
+app_port = 8000
+debug = True
+```
+</CodeGroup>
+
+Deploy to specific environment:
+
+```bash
+# Production
+pyinfra inventory/production.py deploy.py
+
+# Staging
+pyinfra inventory/staging.py deploy.py
+
+# Development
+pyinfra inventory/development.py deploy.py
+```
+
+### Dynamic Inventory
+
+Generate inventory programmatically:
+
+```python inventory.py
+# Generate hosts dynamically
+targets = [
+    f"web-{i:02d}.example.com" 
+    for i in range(1, 11)  # web-01 through web-10
+]
+
+# Or from external source
+import json
+
+def load_from_api():
+    # Load from cloud provider API, database, etc.
+    return [
+        "server1.example.com",
+        "server2.example.com",
+    ]
+
+targets = load_from_api()
+```
+
+### Using Host Facts
+
+Access system information via facts:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, yum
+
+# Get OS distribution
+distro = host.get_fact("LinuxDistribution")
+
+if distro in ["Ubuntu", "Debian"]:
+    apt.packages(
+        name="Install packages",
+        packages=["nginx"],
+        _sudo=True,
+    )
+elif distro in ["CentOS", "RedHat"]:
+    yum.packages(
+        name="Install packages",
+        packages=["nginx"],
+        _sudo=True,
+    )
+```
+
+<Tip>
+  Facts are gathered at runtime and provide information about the target system (OS, architecture, installed packages, etc.).
+</Tip>
+
+## Real-World Example
+
+Complete inventory for a web application:
+
+```python inventory.py
+# Environment
+environment = "production"
+
+# Global configuration
+app_name = "myapp"
+app_version = "2.1.0"
+app_repo = "https://github.com/example/myapp.git"
+
+# Load balancers
+load_balancers = [
+    ("lb-01.example.com", {
+        "ssh_user": "admin",
+        "is_primary": True,
+    }),
+    ("lb-02.example.com", {
+        "ssh_user": "admin",
+        "is_primary": False,
+    }),
+]
+
+load_balancer_data = {
+    "haproxy_version": "2.4",
+    "backend_port": 8000,
+}
+
+# Web servers
+web_servers = [
+    (f"web-{i:02d}.example.com", {
+        "ssh_user": "deploy",
+        "ssh_key": "~/.ssh/deploy_key",
+        "server_id": i,
+    })
+    for i in range(1, 6)  # web-01 through web-05
+]
+
+web_servers_data = {
+    "nginx_workers": 4,
+    "app_workers": 4,
+    "app_port": 8000,
+}
+
+# Database servers
+db_servers = [
+    ("db-01.example.com", {
+        "ssh_user": "postgres",
+        "is_primary": True,
+        "replication_slot": "slot1",
+    }),
+    ("db-02.example.com", {
+        "ssh_user": "postgres",
+        "is_primary": False,
+        "replication_slot": "slot2",
+    }),
+]
+
+db_servers_data = {
+    "postgres_version": "14",
+    "max_connections": 200,
+    "shared_buffers": "2GB",
+}
+
+# Cache servers
+cache_servers = [
+    "cache-01.example.com",
+    "cache-02.example.com",
+]
+
+cache_servers_data = {
+    "redis_maxmemory": "2gb",
+    "redis_policy": "allkeys-lru",
+}
+
+# All hosts
+targets = (
+    load_balancers + 
+    web_servers + 
+    db_servers + 
+    cache_servers
+)
+```
+
+Use in deploy:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files, git, server
+
+print(f"Deploying {host.data.app_name} v{host.data.app_version}")
+print(f"Environment: {host.data.environment}")
+print(f"Host: {host.name}, Groups: {host.groups}")
+
+# Web servers
+if "web_servers" in host.groups:
+    # Install dependencies
+    apt.packages(
+        name="Install web server packages",
+        packages=["nginx", "python3", "python3-pip"],
+        _sudo=True,
+    )
+    
+    # Deploy application
+    git.repo(
+        name="Clone application",
+        src=host.data.app_repo,
+        dest="/opt/myapp",
+        branch="main",
+        _sudo=True,
+    )
+    
+    # Configure with host-specific data
+    files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/nginx.conf",
+        workers=host.data.nginx_workers,
+        port=host.data.app_port,
+        server_id=host.data.server_id,
+        _sudo=True,
+    )
+
+# Database servers
+if "db_servers" in host.groups:
+    apt.packages(
+        name="Install PostgreSQL",
+        packages=[f"postgresql-{host.data.postgres_version}"],
+        _sudo=True,
+    )
+    
+    files.template(
+        name="Configure PostgreSQL",
+        src="templates/postgresql.conf.j2",
+        dest="/etc/postgresql/14/main/postgresql.conf",
+        max_connections=host.data.max_connections,
+        shared_buffers=host.data.shared_buffers,
+        is_primary=host.data.is_primary,
+        _sudo=True,
+    )
+```
+
+## Best Practices
+
+<Tip>
+  **Use groups for organization** - Group hosts by role, not location:
+  
+  ```python
+  # Good
+  web_servers = [...]
+  db_servers = [...]
+  
+  # Less flexible
+  us_east_servers = [...]
+  ```
+</Tip>
+
+<Tip>
+  **Set sensible defaults** - Use global data for defaults, override in groups/hosts:
+  
+  ```python
+  # Global default
+  app_port = 8000
+  
+  # Override for specific host if needed
+  targets = [
+      ("special-server.com", {"app_port": 9000}),
+  ]
+  ```
+</Tip>
+
+<Tip>
+  **Keep secrets separate** - Don't commit secrets to version control:
+  
+  ```python
+  # Load secrets from environment or external file
+  import os
+  
+  database_password = os.environ.get("DB_PASSWORD")
+  api_key = os.environ.get("API_KEY")
+  ```
+</Tip>
+
+## Next Steps
+
+- [Deploying Applications](/guides/deploying-applications) - Build complete deployments using inventory and data
+- [Using Operations](/guides/using-operations) - Learn how to use data in operations
+- [Idempotent Operations](/guides/idempotent-operations) - Understand state management

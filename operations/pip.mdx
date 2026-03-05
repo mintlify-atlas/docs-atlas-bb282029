@@ -1,0 +1,442 @@
+---
+title: pip Operations
+description: Manage Python packages with pip
+icon: python
+---
+
+The `pip` module manages Python packages using pip, compatible with both global installations and virtualenvs.
+
+## Functions
+
+### packages
+
+Install, remove, or update pip packages.
+
+```python
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install Python dependencies",
+    packages=["django", "requests"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="requirements" type="str">
+  Location of requirements file to install/uninstall.
+</ParamField>
+
+<ParamField path="pip" type="str" default="pip">
+  Name or path of the pip directory to use.
+</ParamField>
+
+<ParamField path="virtualenv" type="str">
+  Root directory of virtualenv to work in.
+</ParamField>
+
+<ParamField path="virtualenv_kwargs" type="dict">
+  Dictionary of arguments to pass to `pip.virtualenv`.
+</ParamField>
+
+<ParamField path="extra_install_args" type="str">
+  Additional arguments to the pip install command.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like pip: `<pkg>==<version>`
+</Note>
+
+<Note>
+  If a virtualenv is specified, it will be created if it doesn't exist. `virtualenv_kwargs` can control how the env is created.
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install pyinfra into a virtualenv",
+    packages=["pyinfra"],
+    virtualenv="/usr/local/bin/venv",
+)
+```
+
+```python From Requirements File
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install from requirements.txt",
+    requirements="/app/requirements.txt",
+    virtualenv="/app/venv",
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install latest packages",
+    packages=["django", "requests"],
+    latest=True,
+)
+```
+
+```python With Extra Args
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install with extra index",
+    packages=["mypackage"],
+    extra_install_args="--extra-index-url https://pypi.custom.com/simple",
+)
+```
+</CodeGroup>
+
+---
+
+### virtualenv
+
+Create or remove Python virtualenvs.
+
+```python
+from pyinfra.operations import pip
+
+pip.virtualenv(
+    name="Create a virtualenv",
+    path="/usr/local/bin/venv",
+)
+```
+
+<ParamField path="path" type="str" required>
+  Path where the virtualenv should be created.
+</ParamField>
+
+<ParamField path="python" type="str">
+  Python interpreter to use.
+</ParamField>
+
+<ParamField path="venv" type="bool" default={false}>
+  Use standard venv module instead of virtualenv.
+</ParamField>
+
+<ParamField path="site_packages" type="bool" default={false}>
+  Give access to the global site-packages.
+</ParamField>
+
+<ParamField path="always_copy" type="bool" default={false}>
+  Always copy files rather than symlinking.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the virtualenv should exist.
+</ParamField>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Virtualenv
+from pyinfra.operations import pip
+
+pip.virtualenv(
+    name="Create a virtualenv",
+    path="/usr/local/bin/venv",
+)
+```
+
+```python With Specific Python
+from pyinfra.operations import pip
+
+pip.virtualenv(
+    name="Create virtualenv with Python 3.11",
+    path="/app/venv",
+    python="python3.11",
+)
+```
+
+```python With Site Packages
+from pyinfra.operations import pip
+
+pip.virtualenv(
+    name="Create virtualenv with access to system packages",
+    path="/app/venv",
+    site_packages=True,
+)
+```
+</CodeGroup>
+
+---
+
+### venv
+
+Create or remove Python virtualenvs using the standard venv module.
+
+```python
+from pyinfra.operations import pip
+
+pip.venv(
+    name="Create a venv",
+    path="/usr/local/bin/venv",
+)
+```
+
+<ParamField path="path" type="str" required>
+  Path where the venv should be created.
+</ParamField>
+
+<ParamField path="python" type="str">
+  Python interpreter to use.
+</ParamField>
+
+<ParamField path="site_packages" type="bool" default={false}>
+  Give access to the global site-packages.
+</ParamField>
+
+<ParamField path="always_copy" type="bool" default={false}>
+  Always copy files rather than symlinking.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the venv should exist.
+</ParamField>
+
+<Note>
+  This is a convenience wrapper around `pip.virtualenv` with `venv=True`.
+</Note>
+
+## Common Use Cases
+
+### Django Application Setup
+
+```python
+from pyinfra.operations import pip
+
+# Create virtualenv
+pip.virtualenv(
+    name="Create Django virtualenv",
+    path="/var/www/myapp/venv",
+    python="python3.11",
+)
+
+# Install Django and dependencies
+pip.packages(
+    name="Install Django application",
+    requirements="/var/www/myapp/requirements.txt",
+    virtualenv="/var/www/myapp/venv",
+)
+```
+
+### Data Science Environment
+
+```python
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install data science packages",
+    packages=[
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "scikit-learn",
+        "jupyter",
+    ],
+    virtualenv="/home/user/datascience/venv",
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import pip
+
+# Production dependencies
+pip.packages(
+    name="Install production dependencies",
+    requirements="/app/requirements.txt",
+    virtualenv="/app/venv",
+)
+
+# Development dependencies
+pip.packages(
+    name="Install development dependencies",
+    requirements="/app/requirements-dev.txt",
+    virtualenv="/app/venv",
+)
+```
+
+### Global Tool Installation
+
+```python
+from pyinfra.operations import pip
+
+# Install tools globally
+pip.packages(
+    name="Install global Python tools",
+    packages=[
+        "black",
+        "flake8",
+        "mypy",
+        "pytest",
+    ],
+)
+```
+
+### Pinned Versions for Production
+
+```python
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install with pinned versions",
+    packages=[
+        "django==4.2.0",
+        "psycopg2-binary==2.9.5",
+        "celery==5.2.7",
+        "redis==4.5.4",
+    ],
+    virtualenv="/app/venv",
+)
+```
+
+### Using Custom PyPI Index
+
+```python
+from pyinfra.operations import pip
+
+pip.packages(
+    name="Install from private PyPI",
+    packages=["mycompany-package"],
+    extra_install_args="--index-url https://pypi.mycompany.com/simple",
+    virtualenv="/app/venv",
+)
+```
+
+## Python Package Management Tips
+
+<AccordionGroup>
+  <Accordion title="Requirements Files">
+    Best practices for requirements files:
+    
+    ```python
+    from pyinfra.operations import pip
+    
+    # Production requirements
+    pip.packages(
+        name="Install production requirements",
+        requirements="/app/requirements/prod.txt",
+        virtualenv="/app/venv",
+    )
+    
+    # Common pattern:
+    # requirements/
+    #   base.txt       # Common dependencies
+    #   prod.txt       # Production (includes base.txt)
+    #   dev.txt        # Development (includes base.txt)
+    ```
+  </Accordion>
+
+  <Accordion title="Upgrading Packages">
+    Use the `latest` flag to upgrade packages:
+    
+    ```python
+    from pyinfra.operations import pip
+    
+    # Upgrade all packages to latest
+    pip.packages(
+        name="Upgrade all packages",
+        packages=["django", "requests", "celery"],
+        latest=True,
+        virtualenv="/app/venv",
+    )
+    
+    # Or upgrade from requirements
+    pip.packages(
+        name="Upgrade from requirements",
+        requirements="/app/requirements.txt",
+        latest=True,
+        virtualenv="/app/venv",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Editable Installs">
+    Install packages in development mode:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Install package in editable mode",
+        commands=[
+            "/app/venv/bin/pip install -e /path/to/mypackage",
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Combining with System Packages">
+    Access system packages from virtualenv:
+    
+    ```python
+    from pyinfra.operations import pip
+    
+    # Create venv with system site-packages
+    pip.virtualenv(
+        name="Create venv with system packages",
+        path="/app/venv",
+        site_packages=True,
+    )
+    
+    # Useful when system packages like numpy are pre-installed
+    # with optimized binaries
+    ```
+  </Accordion>
+
+  <Accordion title="Using Different Python Versions">
+    Create virtualenvs with specific Python versions:
+    
+    ```python
+    from pyinfra.operations import pip
+    
+    # Python 3.11
+    pip.virtualenv(
+        name="Create Python 3.11 venv",
+        path="/app/venv-py311",
+        python="python3.11",
+    )
+    
+    # Python 3.9
+    pip.virtualenv(
+        name="Create Python 3.9 venv",
+        path="/app/venv-py39",
+        python="/usr/bin/python3.9",
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Note>
+  Package names are compared using lowercase as per PEP-0426.
+</Note>
+
+<Warning>
+  When using `virtualenv` parameter, the virtualenv will be automatically created if it doesn't exist.
+</Warning>
+
+<Tip>
+  For isolated application installations, consider using `pipx` instead of global pip installations.
+</Tip>

@@ -1,0 +1,153 @@
+---
+title: runit
+description: Manage runit services
+---
+
+Manage runit services.
+
+## Functions
+
+### `runit.service`
+
+Manage the state of runit services.
+
+```python
+runit.service(
+    service,
+    running=True,
+    restarted=False,
+    reloaded=False,
+    command=None,
+    enabled=None,
+    managed=True,
+    svdir="/var/service",
+    sourcedir="/etc/sv",
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="running" type="bool" default="True">
+  Whether the service should be running
+</ParamField>
+
+<ParamField name="restarted" type="bool" default="False">
+  Whether the service should be restarted
+</ParamField>
+
+<ParamField name="reloaded" type="bool" default="False">
+  Whether the service should be reloaded
+</ParamField>
+
+<ParamField name="command" type="str" default="None">
+  Custom command to pass like: `sv <command> <service>`
+</ParamField>
+
+<ParamField name="enabled" type="bool" default="None">
+  Whether this service should be enabled/disabled on boot
+</ParamField>
+
+<ParamField name="managed" type="bool" default="True">
+  Whether runit should manage this service. For services to be controlled, they first need to be managed by runit by adding a symlink to the service in SVDIR. By setting `managed=False` the symlink will be removed. Other options won't have any effect after that. Although the `<service>/down` file can still be controlled with the `enabled` option.
+</ParamField>
+
+<ParamField name="svdir" type="str" default="/var/service">
+  Alternative SVDIR. An alternative SVDIR can be specified. This can be used for user services.
+</ParamField>
+
+<ParamField name="sourcedir" type="str" default="/etc/sv">
+  Where to search for available services. An alternative directory for available services can be specified. Example: `sourcedir=/etc/sv.local` for services managed by the administrator.
+</ParamField>
+
+### `runit.manage`
+
+Manage runit svdir links.
+
+```python
+runit.manage(
+    service,
+    managed=True,
+    svdir="/var/service",
+    sourcedir="/etc/sv",
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="managed" type="bool" default="True">
+  Whether the link should exist
+</ParamField>
+
+<ParamField name="svdir" type="str" default="/var/service">
+  Alternative SVDIR
+</ParamField>
+
+<ParamField name="sourcedir" type="str" default="/etc/sv">
+  Where to search for available services
+</ParamField>
+
+### `runit.wait_runsv`
+
+Wait for runsv for service to be available.
+
+```python
+runit.wait_runsv(
+    service,
+    svdir="/var/service",
+    timeout=10,
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="svdir" type="str" default="/var/service">
+  Alternative SVDIR
+</ParamField>
+
+<ParamField name="timeout" type="int" default="10">
+  Time in seconds to wait
+</ParamField>
+
+### `runit.auto`
+
+Start service automatically by managing the `service/down` file.
+
+```python
+runit.auto(
+    service,
+    auto=True,
+    sourcedir="/etc/sv",
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="auto" type="bool" default="True">
+  Whether the service should start automatically
+</ParamField>
+
+<ParamField name="sourcedir" type="str" default="/etc/sv">
+  Where to search for available services
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import runit
+
+# Manage a runit service
+runit.service(
+    name="Ensure nginx is running",
+    service="nginx",
+    running=True,
+    enabled=True,
+)
+```

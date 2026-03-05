@@ -1,0 +1,459 @@
+---
+title: Package Facts
+description: Gather information about installed packages
+---
+
+Package facts provide information about installed packages across various package managers.
+
+## Package Manager Facts
+
+Pyinfra includes facts for many package managers. Each returns a dictionary of installed packages with their versions.
+
+### Apt (Debian/Ubuntu)
+
+Get installed apt packages:
+
+```python
+from pyinfra import host
+from pyinfra.facts.apt import AptPackages
+
+packages = host.get_fact(AptPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+    # Returns: "1.18.0-6ubuntu14.4"
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Yum (RHEL/CentOS)
+
+Get installed yum packages:
+
+```python
+from pyinfra.facts.yum import YumPackages
+
+packages = host.get_fact(YumPackages)
+
+if "httpd" in packages:
+    print(f"httpd version: {packages['httpd']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### DNF (Fedora/RHEL 8+)
+
+Get installed dnf packages:
+
+```python
+from pyinfra.facts.dnf import DnfPackages
+
+packages = host.get_fact(DnfPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Apk (Alpine Linux)
+
+Get installed apk packages:
+
+```python
+from pyinfra.facts.apk import ApkPackages
+
+packages = host.get_fact(ApkPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Brew (macOS)
+
+Get installed Homebrew packages:
+
+```python
+from pyinfra.facts.brew import BrewPackages
+
+packages = host.get_fact(BrewPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Pkg (FreeBSD)
+
+Get installed pkg packages:
+
+```python
+from pyinfra.facts.pkg import PkgPackages
+
+packages = host.get_fact(PkgPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Pacman (Arch Linux)
+
+Get installed pacman packages:
+
+```python
+from pyinfra.facts.pacman import PacmanPackages
+
+packages = host.get_fact(PacmanPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Zypper (openSUSE)
+
+Get installed zypper packages:
+
+```python
+from pyinfra.facts.zypper import ZypperPackages
+
+packages = host.get_fact(ZypperPackages)
+
+if "nginx" in packages:
+    print(f"nginx version: {packages['nginx']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+## Language Package Managers
+
+### Pip (Python)
+
+Get installed pip packages:
+
+```python
+from pyinfra.facts.pip import PipPackages
+
+# System pip packages
+packages = host.get_fact(PipPackages)
+
+if "requests" in packages:
+    print(f"requests version: {packages['requests']}")
+
+# Virtualenv pip packages
+venv_packages = host.get_fact(
+    PipPackages,
+    virtualenv="/opt/myapp/venv",
+)
+```
+
+**Parameters:**
+- `virtualenv` (str, optional) - Path to virtualenv
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Npm (Node.js)
+
+Get installed npm packages:
+
+```python
+from pyinfra.facts.npm import NpmPackages
+
+# Global packages
+packages = host.get_fact(NpmPackages)
+
+if "express" in packages:
+    print(f"express version: {packages['express']}")
+
+# Project packages
+project_packages = host.get_fact(
+    NpmPackages,
+    directory="/opt/myapp",
+)
+```
+
+**Parameters:**
+- `directory` (str, optional) - Project directory for local packages
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Gem (Ruby)
+
+Get installed Ruby gems:
+
+```python
+from pyinfra.facts.gem import GemPackages
+
+packages = host.get_fact(GemPackages)
+
+if "rails" in packages:
+    print(f"rails version: {packages['rails']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Cargo (Rust)
+
+Get installed Cargo packages:
+
+```python
+from pyinfra.facts.cargo import CargoPackages
+
+packages = host.get_fact(CargoPackages)
+
+if "ripgrep" in packages:
+    print(f"ripgrep version: {packages['ripgrep']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+### Pipx (Python Applications)
+
+Get installed pipx packages:
+
+```python
+from pyinfra.facts.pipx import PipxPackages
+
+packages = host.get_fact(PipxPackages)
+
+if "black" in packages:
+    print(f"black version: {packages['black']}")
+```
+
+**Returns:** `dict[str, str]` - Package name -> version
+
+## Usage Examples
+
+### Check Package Installed
+
+```python
+from pyinfra import host
+from pyinfra.facts.apt import AptPackages
+from pyinfra.operations import apt
+
+packages = host.get_fact(AptPackages)
+
+if "nginx" not in packages:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+    )
+else:
+    host.noop(f"nginx {packages['nginx']} already installed")
+```
+
+### Check Package Version
+
+```python
+from pyinfra.facts.apt import AptPackages
+from pyinfra.operations import apt
+from packaging import version
+
+packages = host.get_fact(AptPackages)
+
+if "nginx" in packages:
+    installed_version = version.parse(packages["nginx"].split("-")[0])
+    required_version = version.parse("1.18.0")
+    
+    if installed_version < required_version:
+        apt.packages(
+            name="Upgrade nginx",
+            packages=["nginx"],
+            latest=True,
+        )
+```
+
+### Distribution-Specific Packages
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution
+from pyinfra.facts.apt import AptPackages
+from pyinfra.facts.yum import YumPackages
+from pyinfra.operations import apt, yum
+
+distro = host.get_fact(LinuxDistribution)
+
+if distro["name"] in ["Ubuntu", "Debian"]:
+    packages = host.get_fact(AptPackages)
+    
+    if "nginx" not in packages:
+        apt.packages(
+            name="Install nginx",
+            packages=["nginx"],
+        )
+
+elif distro["name"] in ["CentOS", "RedHat"]:
+    packages = host.get_fact(YumPackages)
+    
+    if "nginx" not in packages:
+        yum.packages(
+            name="Install nginx",
+            packages=["nginx"],
+        )
+```
+
+### Python Virtual Environment
+
+```python
+from pyinfra.facts.pip import PipPackages
+from pyinfra.operations import pip
+
+venv_path = "/opt/myapp/venv"
+required_packages = {
+    "django": "4.2",
+    "psycopg2-binary": "2.9",
+    "celery": "5.3",
+}
+
+# Check installed packages
+installed = host.get_fact(PipPackages, virtualenv=venv_path)
+
+# Install missing packages
+missing = []
+for package, version in required_packages.items():
+    if package not in installed:
+        missing.append(f"{package}=={version}")
+
+if missing:
+    pip.packages(
+        name="Install missing Python packages",
+        packages=missing,
+        virtualenv=venv_path,
+    )
+```
+
+### List Installed Packages
+
+```python
+from pyinfra.facts.apt import AptPackages
+
+packages = host.get_fact(AptPackages)
+
+print(f"Total packages installed: {len(packages)}")
+print("\nSome installed packages:")
+for name, version in list(packages.items())[:10]:
+    print(f"  {name}: {version}")
+```
+
+### Check Multiple Package Managers
+
+```python
+from pyinfra import host
+from pyinfra.facts.apt import AptPackages
+from pyinfra.facts.pip import PipPackages
+from pyinfra.facts.npm import NpmPackages
+
+# System packages
+system_packages = host.get_fact(AptPackages)
+print(f"System packages: {len(system_packages)}")
+
+# Python packages
+python_packages = host.get_fact(PipPackages)
+print(f"Python packages: {len(python_packages)}")
+
+# Node.js packages
+node_packages = host.get_fact(NpmPackages)
+print(f"Node.js packages: {len(node_packages)}")
+```
+
+## Complete Example
+
+Here's a comprehensive example using package facts:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import LinuxDistribution, Which
+from pyinfra.facts.apt import AptPackages
+from pyinfra.facts.pip import PipPackages
+from pyinfra.facts.npm import NpmPackages
+from pyinfra.operations import apt, pip, npm
+from packaging import version
+
+# Get system info
+distro = host.get_fact(LinuxDistribution)
+print(f"\nConfiguring packages on {distro['name']} {distro['version']}")
+
+# Define required system packages
+system_packages = {
+    "nginx": "1.18.0",
+    "postgresql": "14",
+    "redis-server": None,  # Any version
+}
+
+# Check system packages
+installed_system = host.get_fact(AptPackages)
+missing_system = []
+
+for package, min_version in system_packages.items():
+    if package not in installed_system:
+        missing_system.append(package)
+        print(f"❌ {package}: not installed")
+    else:
+        installed_ver = installed_system[package]
+        print(f"✓ {package}: {installed_ver}")
+        
+        if min_version:
+            installed_parsed = version.parse(installed_ver.split("-")[0])
+            min_parsed = version.parse(min_version)
+            
+            if installed_parsed < min_parsed:
+                print(f"  ⚠️  Version {installed_ver} < {min_version}")
+
+if missing_system:
+    apt.packages(
+        name="Install missing system packages",
+        packages=missing_system,
+        update=True,
+        _sudo=True,
+    )
+
+# Check Python environment
+if host.get_fact(Which, command="python3"):
+    venv_path = "/opt/myapp/venv"
+    python_packages = host.get_fact(PipPackages, virtualenv=venv_path)
+    
+    required_python = ["django>=4.2", "celery>=5.3", "psycopg2-binary"]
+    
+    pip.packages(
+        name="Install Python packages",
+        packages=required_python,
+        virtualenv=venv_path,
+        _sudo=True,
+    )
+
+# Check Node.js environment
+if host.get_fact(Which, command="npm"):
+    node_packages = host.get_fact(NpmPackages)
+    
+    required_node = ["express", "socket.io", "winston"]
+    missing_node = [p for p in required_node if p not in node_packages]
+    
+    if missing_node:
+        npm.packages(
+            name="Install Node.js packages",
+            packages=missing_node,
+        )
+
+print("\n✓ Package configuration complete")
+```
+
+## Source Reference
+
+Package facts are located in their respective fact files:
+
+- `src/pyinfra/facts/apt.py` - Debian/Ubuntu packages
+- `src/pyinfra/facts/yum.py` - RHEL/CentOS packages
+- `src/pyinfra/facts/dnf.py` - Fedora/RHEL 8+ packages
+- `src/pyinfra/facts/apk.py` - Alpine packages
+- `src/pyinfra/facts/brew.py` - macOS packages
+- `src/pyinfra/facts/pip.py` - Python packages
+- `src/pyinfra/facts/npm.py` - Node.js packages
+- `src/pyinfra/facts/gem.py` - Ruby packages
+- `src/pyinfra/facts/cargo.py` - Rust packages

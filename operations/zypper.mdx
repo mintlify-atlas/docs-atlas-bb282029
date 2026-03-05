@@ -1,0 +1,434 @@
+---
+title: zypper Operations
+description: Manage zypper packages and repositories on openSUSE systems
+icon: suse
+---
+
+The `zypper` module manages packages and repositories on openSUSE and SUSE Linux Enterprise systems.
+
+## Functions
+
+### packages
+
+Install, remove, or update zypper packages.
+
+```python
+from pyinfra.operations import zypper
+
+zypper.packages(
+    name="Install development tools",
+    packages=["git", "vim"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `zypper update` before installing packages.
+</ParamField>
+
+<ParamField path="clean" type="bool" default={false}>
+  Run `zypper clean --all` before installing packages.
+</ParamField>
+
+<ParamField path="extra_global_install_args" type="str">
+  Additional global arguments to the zypper install command.
+</ParamField>
+
+<ParamField path="extra_install_args" type="str">
+  Additional arguments to the zypper install command.
+</ParamField>
+
+<ParamField path="extra_global_uninstall_args" type="str">
+  Additional global arguments to the zypper uninstall command.
+</ParamField>
+
+<ParamField path="extra_uninstall_args" type="str">
+  Additional arguments to the zypper uninstall command.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like zypper: `<pkg>=<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import zypper
+
+# Update package list and install packages
+zypper.packages(
+    name="Install Vim and Vim enhanced",
+    packages=["vim-enhanced", "vim"],
+    update=True,
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import zypper
+
+# Install the latest versions of packages (always check)
+zypper.packages(
+    name="Install latest Vim",
+    packages=["vim"],
+    latest=True,
+)
+```
+
+```python With Clean
+from pyinfra.operations import zypper
+
+# Clean cache before installing
+zypper.packages(
+    name="Install packages with fresh cache",
+    packages=["nginx", "php"],
+    clean=True,
+)
+```
+</CodeGroup>
+
+---
+
+### update
+
+Update all zypper packages.
+
+```python
+from pyinfra.operations import zypper
+
+zypper.update(
+    name="Update all packages",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### repo
+
+Add, remove, or update zypper repositories.
+
+```python
+from pyinfra.operations import zypper
+
+zypper.repo(
+    name="Add container virtualization repo",
+    src="Virtualization:containers",
+    baseurl="https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/",
+)
+```
+
+<ParamField path="src" type="str" required>
+  URL or name for the `.repo` file.
+</ParamField>
+
+<ParamField path="baseurl" type="str">
+  The baseurl of the repo (if `src` is not a URL).
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the `.repo` file should be present.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Optional verbose description.
+</ParamField>
+
+<ParamField path="enabled" type="bool" default={true}>
+  Whether this repo is enabled.
+</ParamField>
+
+<ParamField path="gpgcheck" type="bool" default={true}>
+  Whether to set `gpgcheck=1`.
+</ParamField>
+
+<ParamField path="gpgkey" type="str">
+  The URL to the GPG key for this repo.
+</ParamField>
+
+<ParamField path="type" type="str" default="rpm-md">
+  The type field for this repo.
+</ParamField>
+
+<Note>
+  `baseurl`, `description`, `gpgcheck`, and `gpgkey` are only valid when `src` is a filename (not a URL). Use a URL to download and install remote repository files.
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python From URL
+from pyinfra.operations import zypper
+
+# Download a repository file
+zypper.repo(
+    name="Install container virtualization repo via URL",
+    src="https://download.opensuse.org/repositories/Virtualization:containers/openSUSE_Tumbleweed/Virtualization:containers.repo",
+)
+```
+
+```python Manual Construction
+from pyinfra.operations import zypper
+
+# Create the repository file from baseurl/etc
+zypper.repo(
+    name="Install container virtualization repo",
+    src="Virtualization:containers (openSUSE_Tumbleweed)",
+    baseurl="https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/",
+)
+```
+</CodeGroup>
+
+---
+
+### rpm
+
+Install or remove .rpm package files.
+
+```python
+from pyinfra.operations import zypper
+
+zypper.rpm(
+    name="Install task from rpm",
+    src="https://github.com/go-task/task/releases/download/v2.8.1/task_linux_amd64.rpm",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Filename or URL of the `.rpm` package.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the package should exist on the system.
+</ParamField>
+
+<Warning>
+  **URL sources with `present=False`**: If the `.rpm` file isn't downloaded, pyinfra can't remove any existing package as the file won't exist until mid-deploy.
+</Warning>
+
+---
+
+### key
+
+Add zypper GPG keys with rpm.
+
+```python
+from pyinfra import host
+from pyinfra.operations import zypper
+from pyinfra.facts.server import LinuxDistribution
+
+linux_id = host.get_fact(LinuxDistribution)["release_meta"].get("ID")
+zypper.key(
+    name="Add Docker GPG key",
+    src=f"https://download.docker.com/linux/{linux_id}/gpg",
+)
+```
+
+<ParamField path="src" type="str" required>
+  Filename or URL of the GPG key.
+</ParamField>
+
+<Warning>
+  This operation is **not idempotent** - it always returns one command without state checking.
+</Warning>
+
+<Note>
+  The `key` operation is inherited from the `yum` module.
+</Note>
+
+## Common Use Cases
+
+### Install Docker on openSUSE
+
+```python
+from pyinfra.operations import zypper
+
+# Add Docker repository
+zypper.repo(
+    name="Add Docker repository",
+    src="https://download.docker.com/linux/sles/docker-ce.repo",
+)
+
+# Install Docker
+zypper.packages(
+    name="Install Docker",
+    packages=["docker-ce", "docker-ce-cli", "containerd.io"],
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import zypper
+
+# Install development patterns
+zypper.packages(
+    name="Install development pattern",
+    packages=["devel_basis"],
+)
+
+# Install additional tools
+zypper.packages(
+    name="Install development tools",
+    packages=[
+        "git",
+        "vim",
+        "tmux",
+        "wget",
+        "curl",
+    ],
+    update=True,
+)
+```
+
+### Web Server Setup
+
+```python
+from pyinfra.operations import zypper
+
+zypper.packages(
+    name="Install web server stack",
+    packages=[
+        "nginx",
+        "php",
+        "php-fpm",
+        "mariadb",
+    ],
+    update=True,
+)
+```
+
+### System Update
+
+```python
+from pyinfra.operations import zypper
+
+# Clean metadata
+zypper.packages(
+    name="Clean zypper cache",
+    packages=[],
+    clean=True,
+)
+
+# Update all packages
+zypper.update(
+    name="Update all packages",
+)
+```
+
+### Install from Custom Repository
+
+```python
+from pyinfra.operations import zypper
+
+# Add custom repository
+zypper.repo(
+    name="Add Packman repository",
+    src="packman",
+    baseurl="https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/",
+    type="rpm-md",
+)
+
+# Install packages from repository
+zypper.packages(
+    name="Install multimedia codecs",
+    packages=["ffmpeg", "vlc"],
+)
+```
+
+## openSUSE-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Patterns">
+    openSUSE uses patterns for installing groups of related packages:
+    
+    ```python
+    from pyinfra.operations import zypper
+    
+    # Install development pattern
+    zypper.packages(
+        name="Install development pattern",
+        packages=["devel_basis", "devel_C_C++"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Repository Management">
+    List and manage repositories:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # List repositories
+    server.shell(
+        name="List repositories",
+        commands=["zypper repos"],
+    )
+    
+    # Refresh repositories
+    server.shell(
+        name="Refresh repositories",
+        commands=["zypper refresh"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Package Locks">
+    Lock packages to prevent updates:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Lock a package
+    server.shell(
+        name="Lock kernel package",
+        commands=["zypper addlock kernel-default"],
+    )
+    
+    # Unlock a package
+    server.shell(
+        name="Unlock kernel package",
+        commands=["zypper removelock kernel-default"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Distribution Upgrade">
+    Upgrade to a new openSUSE version:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Distribution upgrade
+    server.shell(
+        name="Upgrade distribution",
+        commands=["zypper dup --no-confirm"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Note>
+  Zypper automatically uses the `--non-interactive` flag for all operations in pyinfra.
+</Note>
+
+<Warning>
+  When using custom repositories, always verify the repository's authenticity and import the GPG key before installing packages.
+</Warning>

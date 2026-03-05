@@ -1,0 +1,418 @@
+---
+title: "CLI Arguments"
+description: "Complete reference for all pyinfra CLI flags and options"
+---
+
+## Required Arguments
+
+<ParamField path="INVENTORY" type="string" required>
+  Defines the target hosts. Can be:
+  - A Python inventory file (e.g., `inventory.py`)
+  - A single hostname (e.g., `host.example.com`)
+  - Comma-separated hostnames (e.g., `host1.com,host2.com,@local`)
+</ParamField>
+
+<ParamField path="OPERATIONS" type="string" required>
+  Specifies what to execute. Can be:
+  - One or more deploy files (e.g., `deploy.py`)
+  - An operation call (e.g., `server.user pyinfra`)
+  - An exec command (e.g., `exec -- echo hello`)
+  - A fact query (e.g., `fact server.LinuxName`)
+  - Debug command (`debug-inventory`)
+</ParamField>
+
+---
+
+## Output & Verbosity
+
+<ParamField path="-v" type="flag">
+  Increase verbosity. Can be repeated up to 3 times:
+  - `-v`: Print meta information and noop operations
+  - `-vv`: Print input (commands sent to hosts)
+  - `-vvv`: Print output (command results from hosts)
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py -vvv
+  ```
+</ParamField>
+
+<ParamField path="--dry" type="flag">
+  Don't execute operations on target hosts. Shows what would be changed without making actual changes.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --dry
+  ```
+</ParamField>
+
+<ParamField path="--diff" type="flag">
+  Show differences when changing text files and templates. Useful for reviewing file changes before applying.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --diff
+  ```
+</ParamField>
+
+---
+
+## Execution Control
+
+<ParamField path="-y, --yes" type="flag">
+  Execute operations immediately without prompts or change detection. Can also be set via `PYINFRA_YES` environment variable.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py -y
+  export PYINFRA_YES=1
+  pyinfra inventory.py deploy.py
+  ```
+</ParamField>
+
+<ParamField path="--limit" type="string">
+  Restrict target hosts by name or group name. Supports wildcards. Can be specified multiple times.
+  
+  **Examples:**
+  ```bash
+  pyinfra inventory.py deploy.py --limit webservers
+  pyinfra inventory.py deploy.py --limit "web-*"
+  pyinfra inventory.py deploy.py --limit group1 --limit group2
+  ```
+</ParamField>
+
+<ParamField path="--fail-percent" type="integer">
+  Percentage of hosts that need to fail before exiting early. Default behavior prompts on any failure when not using `-y`.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --fail-percent 25
+  ```
+</ParamField>
+
+<ParamField path="--parallel" type="integer">
+  Number of operations to run in parallel. Controls concurrent execution across hosts.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --parallel 10
+  ```
+</ParamField>
+
+<ParamField path="--serial" type="flag">
+  Run operations in serial, host by host, instead of operation by operation.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --serial
+  ```
+</ParamField>
+
+<ParamField path="--no-wait" type="flag">
+  Don't wait between operations for hosts. Executes operations immediately without delays.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --no-wait
+  ```
+</ParamField>
+
+<ParamField path="--retry" type="integer" default="0">
+  Number of times to retry failed operations.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --retry 3
+  ```
+</ParamField>
+
+<ParamField path="--retry-delay" type="integer" default="5">
+  Delay in seconds between retry attempts.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --retry 3 --retry-delay 10
+  ```
+</ParamField>
+
+---
+
+## Data & Configuration
+
+<ParamField path="--data" type="string">
+  Override data values in format `key=value`. Can be specified multiple times. Values are automatically parsed (booleans, numbers, strings).
+  
+  **Examples:**
+  ```bash
+  pyinfra inventory.py deploy.py --data env=production
+  pyinfra inventory.py deploy.py --data debug=true --data workers=4
+  ```
+</ParamField>
+
+<ParamField path="--group-data" type="string">
+  Paths to load additional group data from. Overrides matching keys. Can be specified multiple times.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --group-data ./extra-data/
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string" default="config.py">
+  Specify config file to use instead of default `config.py`.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --config production-config.py
+  ```
+</ParamField>
+
+<ParamField path="--chdir" type="string">
+  Set the working directory before executing. All relative paths will be resolved from this directory.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --chdir /path/to/project
+  ```
+</ParamField>
+
+---
+
+## Authentication & Privilege
+
+<ParamField path="--sudo" type="flag">
+  Execute operations with sudo (as root or another user).
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --sudo
+  ```
+</ParamField>
+
+<ParamField path="--sudo-user" type="string">
+  Which user to sudo to when using `--sudo`.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --sudo --sudo-user postgres
+  ```
+</ParamField>
+
+<ParamField path="--use-sudo-password" type="flag">
+  Use a password with sudo. pyinfra will prompt for the password.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --sudo --use-sudo-password
+  ```
+</ParamField>
+
+<ParamField path="--same-sudo-password" type="flag">
+  All hosts have the same sudo password, so ask only once instead of per-host.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --sudo --same-sudo-password
+  ```
+</ParamField>
+
+<ParamField path="--su-user" type="string">
+  Which user to su to for privilege escalation (alternative to sudo).
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --su-user root
+  ```
+</ParamField>
+
+<ParamField path="--shell-executable" type="string">
+  Shell to use for command execution. Examples: `sh`, `bash`, `cmd`, `ps` (PowerShell).
+  
+  **Examples:**
+  ```bash
+  pyinfra inventory.py deploy.py --shell-executable sh
+  pyinfra windows-hosts deploy.py --shell-executable ps
+  ```
+</ParamField>
+
+---
+
+## SSH Connection
+
+<ParamField path="--ssh-user, --user" type="string">
+  SSH user to connect as.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --ssh-user ubuntu
+  ```
+</ParamField>
+
+<ParamField path="--ssh-port, --port" type="integer">
+  SSH port to connect to.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --ssh-port 2222
+  ```
+</ParamField>
+
+<ParamField path="--ssh-key, --key" type="path">
+  SSH private key filename for authentication.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --ssh-key ~/.ssh/id_rsa_deploy
+  ```
+</ParamField>
+
+<ParamField path="--ssh-key-password, --key-password" type="string">
+  SSH private key password if the key is encrypted.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --ssh-key ~/.ssh/id_rsa --ssh-key-password
+  ```
+</ParamField>
+
+<ParamField path="--ssh-password, --password" type="string">
+  SSH password for authentication (less secure than key-based auth).
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --ssh-password
+  ```
+</ParamField>
+
+<Note>
+  The non-prefixed variants (`--user`, `--port`, `--key`, etc.) are deprecated and may be removed in future versions. Use the `--ssh-*` prefixed versions instead.
+</Note>
+
+---
+
+## Debug & Development
+
+<ParamField path="--debug" type="flag">
+  Print debug logs from pyinfra. Shows detailed internal operations.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --debug
+  ```
+</ParamField>
+
+<ParamField path="--debug-all" type="flag">
+  Print debug logs from all packages including pyinfra. Very verbose output.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --debug-all
+  ```
+</ParamField>
+
+<ParamField path="--debug-facts" type="flag">
+  Print facts after generating operations and exit without executing. Useful for debugging fact collection.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --debug-facts
+  ```
+</ParamField>
+
+<ParamField path="--debug-operations" type="flag">
+  Print operations after generating and exit without executing. Shows the operation plan.
+  
+  **Example:**
+  ```bash
+  pyinfra inventory.py deploy.py --debug-operations
+  ```
+</ParamField>
+
+---
+
+## Information & Help
+
+<ParamField path="-h, --help" type="flag">
+  Show help message and exit.
+  
+  **Example:**
+  ```bash
+  pyinfra --help
+  ```
+</ParamField>
+
+<ParamField path="--version" type="flag">
+  Show pyinfra version and exit.
+  
+  **Example:**
+  ```bash
+  pyinfra --version
+  ```
+</ParamField>
+
+<ParamField path="--support" type="flag">
+  Print useful information for support (version, Python version, platform) and exit.
+  
+  **Example:**
+  ```bash
+  pyinfra --support
+  ```
+</ParamField>
+
+---
+
+## Common Combinations
+
+### Dry Run with Verbose Output
+
+```bash
+pyinfra inventory.py deploy.py --dry -vv
+```
+
+See what would be executed with detailed input information.
+
+### Production Deployment
+
+```bash
+pyinfra inventory.py deploy.py \
+  --limit production \
+  --data env=production \
+  --sudo \
+  -y
+```
+
+Execute immediately on production hosts with sudo.
+
+### Debug Deployment
+
+```bash
+pyinfra inventory.py deploy.py \
+  --debug \
+  --dry \
+  -vvv
+```
+
+Full debug output with dry run.
+
+### Serial Execution with Retries
+
+```bash
+pyinfra inventory.py deploy.py \
+  --serial \
+  --retry 3 \
+  --retry-delay 10
+```
+
+Run host-by-host with retries on failure.
+
+### Custom SSH Configuration
+
+```bash
+pyinfra inventory.py deploy.py \
+  --ssh-user deploy \
+  --ssh-port 2222 \
+  --ssh-key ~/.ssh/deploy_key \
+  --sudo
+```
+
+Connect with specific SSH settings and use sudo.

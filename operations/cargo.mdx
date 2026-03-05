@@ -1,0 +1,356 @@
+---
+title: cargo Operations
+description: Manage Rust packages with cargo
+icon: rust
+---
+
+The `cargo` module manages Rust packages using cargo, the Rust package manager and build tool.
+
+## Functions
+
+### packages
+
+Install, remove, or update cargo packages.
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Install Rust tools",
+    packages=["ripgrep", "fd-find"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be present.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like cargo: `<pkg>@<version>`
+</Note>
+
+## Common Use Cases
+
+### Install Development Tools
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Install Rust development tools",
+    packages=[
+        "cargo-watch",
+        "cargo-edit",
+        "cargo-outdated",
+    ],
+)
+```
+
+### Install Command-Line Tools
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Install CLI tools written in Rust",
+    packages=[
+        "ripgrep",      # Fast grep alternative
+        "fd-find",      # Fast find alternative
+        "bat",          # Cat with syntax highlighting
+        "exa",          # Modern ls replacement
+        "tokei",        # Code statistics
+    ],
+)
+```
+
+### Install Specific Versions
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Install specific versions",
+    packages=[
+        "ripgrep@13.0.0",
+        "fd-find@8.7.0",
+    ],
+)
+```
+
+### Update Tools
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Update Rust tools",
+    packages=["ripgrep", "bat"],
+    latest=True,
+)
+```
+
+### Remove Tools
+
+```python
+from pyinfra.operations import cargo
+
+cargo.packages(
+    name="Remove unused tools",
+    packages=["old-tool"],
+    present=False,
+)
+```
+
+### Install from Git Repository
+
+```python
+from pyinfra.operations import server
+
+server.shell(
+    name="Install from git repository",
+    commands=[
+        "cargo install --git https://github.com/user/repo",
+    ],
+)
+```
+
+### Install with Features
+
+```python
+from pyinfra.operations import server
+
+server.shell(
+    name="Install with specific features",
+    commands=[
+        "cargo install ripgrep --features 'pcre2'",
+    ],
+)
+```
+
+## Cargo-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Installation Location">
+    Cargo installs binaries to `~/.cargo/bin` by default:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Ensure ~/.cargo/bin is in PATH
+    server.shell(
+        name="Add cargo bin to PATH",
+        commands=[
+            'echo "export PATH=$HOME/.cargo/bin:$PATH" >> ~/.bashrc',
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Update Cargo Itself">
+    Update cargo and rustc:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Update Rust toolchain",
+        commands=["rustup update"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="List Installed Packages">
+    View installed cargo packages:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="List cargo packages",
+        commands=["cargo install --list"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Clean Build Cache">
+    Clean cargo's build cache:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Clean cargo cache",
+        commands=["cargo cache --autoclean"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Install with Locked Dependencies">
+    Install with exact dependency versions:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Install with locked dependencies",
+        commands=["cargo install ripgrep --locked"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Cross-Compilation">
+    Install for different targets:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Add target
+    server.shell(
+        name="Add ARM target",
+        commands=["rustup target add aarch64-unknown-linux-gnu"],
+    )
+    
+    # Install for target
+    server.shell(
+        name="Install for ARM",
+        commands=[
+            "cargo install ripgrep --target aarch64-unknown-linux-gnu",
+        ],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Install Rust First">
+    ```python
+    from pyinfra.operations import server, cargo
+    
+    # Install Rust using rustup
+    server.shell(
+        name="Install Rust",
+        commands=[
+            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
+        ],
+    )
+    
+    # Then install cargo packages
+    cargo.packages(
+        name="Install tools",
+        packages=["ripgrep"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Use for CLI Tools">
+    Cargo is excellent for installing fast CLI tools:
+    
+    ```python
+    from pyinfra.operations import cargo
+    
+    # Modern Unix tools written in Rust
+    cargo.packages(
+        name="Install modern CLI tools",
+        packages=[
+            "ripgrep",      # Better grep
+            "fd-find",      # Better find
+            "bat",          # Better cat
+            "exa",          # Better ls
+            "du-dust",      # Better du
+            "sd",           # Better sed
+            "hyperfine",    # Benchmarking
+            "tokei",        # Code statistics
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Keep Tools Updated">
+    ```python
+    from pyinfra.operations import cargo
+    
+    # Regular updates
+    cargo.packages(
+        name="Update all Rust tools",
+        packages=[
+            "ripgrep",
+            "bat",
+            "fd-find",
+        ],
+        latest=True,
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Popular Rust CLI Tools
+
+Here are some popular CLI tools you can install with cargo:
+
+<CardGroup cols={2}>
+  <Card title="ripgrep">
+    Fast recursive grep alternative
+    ```python
+    cargo.packages(packages=["ripgrep"])
+    ```
+  </Card>
+  
+  <Card title="fd-find">
+    Fast and user-friendly find alternative
+    ```python
+    cargo.packages(packages=["fd-find"])
+    ```
+  </Card>
+  
+  <Card title="bat">
+    Cat clone with syntax highlighting
+    ```python
+    cargo.packages(packages=["bat"])
+    ```
+  </Card>
+  
+  <Card title="exa">
+    Modern replacement for ls
+    ```python
+    cargo.packages(packages=["exa"])
+    ```
+  </Card>
+  
+  <Card title="tokei">
+    Code statistics tool
+    ```python
+    cargo.packages(packages=["tokei"])
+    ```
+  </Card>
+  
+  <Card title="hyperfine">
+    Command-line benchmarking tool
+    ```python
+    cargo.packages(packages=["hyperfine"])
+    ```
+  </Card>
+</CardGroup>
+
+## Important Notes
+
+<Warning>
+  Installing cargo packages compiles from source, which can take significant time and requires a C compiler and build tools.
+</Warning>
+
+<Note>
+  Cargo packages are installed to `~/.cargo/bin` by default. Ensure this directory is in your PATH.
+</Note>
+
+<Tip>
+  For faster installations on multiple machines, consider setting up a binary cache or using pre-compiled binaries where available.
+</Tip>

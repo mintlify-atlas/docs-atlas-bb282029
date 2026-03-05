@@ -1,0 +1,247 @@
+---
+title: mysql
+description: Manage MySQL databases, users and privileges
+---
+
+Manage MySQL databases, users and privileges.
+
+Requires the `mysql` CLI executable on the target host(s).
+
+All operations in this module take four optional arguments:
+- `mysql_user`: the username to connect to mysql to
+- `mysql_password`: the password for the connecting user
+- `mysql_host`: the hostname of the server to connect to
+- `mysql_port`: the port of the server to connect to
+
+## Functions
+
+### `mysql.sql`
+
+Execute arbitrary SQL against MySQL.
+
+```python
+mysql.sql(
+    sql,
+    database=None,
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="sql" type="str" required>
+  SQL command(s) to execute
+</ParamField>
+
+<ParamField name="database" type="str" default="None">
+  Optional database to open the connection with
+</ParamField>
+
+### `mysql.user`
+
+Add/remove/update MySQL users.
+
+```python
+mysql.user(
+    user,
+    present=True,
+    user_hostname="localhost",
+    password=None,
+    privileges=None,
+    require=None,
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="user" type="str" required>
+  The name of the user
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the user should exist or not
+</ParamField>
+
+<ParamField name="user_hostname" type="str" default="localhost">
+  The hostname of the user
+</ParamField>
+
+<ParamField name="password" type="str" default="None">
+  The password of the user (if created)
+</ParamField>
+
+<ParamField name="privileges" type="str | list[str]" default="None">
+  The global privileges for this user
+</ParamField>
+
+<ParamField name="require" type="str" default="None">
+  SSL or X509 - MySQL REQUIRE SSL/TLS options
+</ParamField>
+
+<Note>
+**Hostname:** this + `user` makes the username - so changing this will create a new user, rather than update users with the same `user`.
+
+**Password:** will only be applied if the user does not exist - ie pyinfra cannot detect if the current password doesn't match the one provided, so won't attempt to change it.
+</Note>
+
+### `mysql.database`
+
+Add/remove MySQL databases.
+
+```python
+mysql.database(
+    database,
+    present=True,
+    collate=None,
+    charset=None,
+    user=None,
+    user_hostname="localhost",
+    user_privileges="ALL",
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="database" type="str" required>
+  The name of the database
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the database should exist or not
+</ParamField>
+
+<ParamField name="collate" type="str" default="None">
+  The collate to use when creating the database
+</ParamField>
+
+<ParamField name="charset" type="str" default="None">
+  The charset to use when creating the database
+</ParamField>
+
+<ParamField name="user" type="str" default="None">
+  MySQL user to grant privileges on this database to
+</ParamField>
+
+<ParamField name="user_privileges" type="str | list[str]" default="ALL">
+  Privileges to grant to any specified user
+</ParamField>
+
+### `mysql.privileges`
+
+Add/remove MySQL privileges for a user, either global, database or table specific.
+
+```python
+mysql.privileges(
+    user,
+    privileges,
+    user_hostname="localhost",
+    database="*",
+    table="*",
+    flush=True,
+    with_grant_option=False,
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="user" type="str" required>
+  Name of the user to manage privileges for
+</ParamField>
+
+<ParamField name="privileges" type="str | list[str]" required>
+  List of privileges the user should have
+</ParamField>
+
+<ParamField name="database" type="str" default="*">
+  Name of the database to grant privileges to (defaults to all)
+</ParamField>
+
+<ParamField name="table" type="str" default="*">
+  Name of the table to grant privileges to (defaults to all)
+</ParamField>
+
+<ParamField name="flush" type="bool" default="True">
+  Whether to flush (and update) the privileges table after any changes
+</ParamField>
+
+### `mysql.dump`
+
+Dump a MySQL database into a `.sql` file. Requires `mysqldump`.
+
+```python
+mysql.dump(
+    dest,
+    database=None,
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="dest" type="str" required>
+  Name of the file to dump the SQL to
+</ParamField>
+
+<ParamField name="database" type="str" default="None">
+  Name of the database to dump
+</ParamField>
+
+### `mysql.load`
+
+Load `.sql` file into a database.
+
+```python
+mysql.load(
+    src,
+    database=None,
+    mysql_user=None,
+    mysql_password=None,
+    mysql_host=None,
+    mysql_port=None,
+)
+```
+
+<ParamField name="src" type="str" required>
+  The filename to read from
+</ParamField>
+
+<ParamField name="database" type="str" default="None">
+  Name of the database to import into
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import mysql
+
+# Create a MySQL user
+mysql.user(
+    name="Create the pyinfra@localhost MySQL user",
+    user="pyinfra",
+    password="somepassword",
+)
+
+# Create a database
+mysql.database(
+    name="Create the pyinfra_stuff database",
+    database="pyinfra_stuff",
+    user="pyinfra",
+    user_privileges=["SELECT", "INSERT"],
+    charset="utf8",
+)
+
+# Dump a database
+mysql.dump(
+    name="Dump the pyinfra_stuff database",
+    dest="/tmp/pyinfra_stuff.dump",
+    database="pyinfra_stuff",
+)
+```

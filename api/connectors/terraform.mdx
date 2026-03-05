@@ -1,0 +1,479 @@
+---
+title: Terraform Connector
+description: Generate inventory from Terraform outputs
+---
+
+The Terraform connector generates pyinfra inventory from Terraform output variables. This enables seamless integration between Terraform infrastructure provisioning and pyinfra configuration management.
+
+## Overview
+
+The Terraform connector reads `terraform output -json` to generate hosts dynamically based on Terraform state.
+
+```shell
+# Use terraform output variable
+pyinfra @terraform/server_group.value.server_ips deploy.py
+
+# Use default pyinfra_inventory output
+pyinfra @terraform deploy.py
+```
+
+<Note>
+The Terraform connector is in beta. Report issues on GitHub if you encounter problems.
+</Note>
+
+## Requirements
+
+- Terraform CLI installed and accessible
+- Terraform state with output variables
+- Current directory contains Terraform configuration
+
+## Terraform Output Format
+
+The connector uses flattened JSON output from `terraform output -json`:
+
+```json
+{
+  "server_group": {
+    "value": {
+      "server_ips": [
+        "1.2.3.4",
+        "1.2.3.5",
+        "1.2.3.6"
+      ]
+    }
+  }
+}
+```
+
+Access with:
+```shell
+pyinfra @terraform/server_group.value.server_ips deploy.py
+```
+
+## Basic Usage
+
+### List of IPs
+
+Simplest form - list of IP addresses or hostnames:
+
+```hcl
+# terraform/main.tf
+output "pyinfra_inventory" {
+  value = [
+    "192.168.1.10",
+    "192.168.1.11",
+    "192.168.1.12",
+  ]
+}
+```
+
+```shell
+# Use default output name
+pyinfra @terraform deploy.py
+```
+
+### Named Output
+
+Use specific output variable:
+
+```hcl
+# terraform/main.tf
+output "web_servers" {
+  value = [
+    aws_instance.web[0].public_ip,
+    aws_instance.web[1].public_ip,
+  ]
+}
+```
+
+```shell
+# Specify output path
+pyinfra @terraform/web_servers.value deploy.py
+```
+
+## Advanced Usage
+
+### Hosts with Data
+
+Pass host-specific data:
+
+```hcl
+# terraform/main.tf
+output "pyinfra_inventory" {
+  value = [
+    {
+      "ssh_hostname" = aws_instance.web[0].public_ip
+      "ssh_user"     = "ubuntu"
+      "app_role"     = "web"
+    },
+    {
+      "ssh_hostname" = aws_instance.web[1].public_ip
+      "ssh_user"     = "ubuntu"
+      "app_role"     = "web"
+    },
+    {
+      "ssh_hostname" = aws_instance.db.public_ip
+      "ssh_user"     = "postgres"
+      "app_role"     = "database"
+    },
+  ]
+}
+```
+
+```python
+# deploy.py
+from pyinfra import host
+from pyinfra.operations import apt
+
+if host.data.app_role == "web":
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+elif host.data.app_role == "database":
+    apt.packages(
+        name="Install postgresql",
+        packages=["postgresql"],
+        _sudo=True,
+    )
+```
+
+### AWS Example
+
+Complete AWS infrastructure with Terraform and pyinfra:
+
+```hcl
+# terraform/main.tf
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+# Create EC2 instances
+resource "aws_instance" "web" {
+  count         = 3
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+  key_name      = "my-key"
+  
+  tags = {
+    Name = "web-${count.index}"
+    Role = "webserver"
+  }
+}
+
+resource "aws_instance" "db" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.small"
+  key_name      = "my-key"
+  
+  tags = {
+    Name = "database"
+    Role = "database"
+  }
+}
+
+# Output for pyinfra
+output "pyinfra_inventory" {
+  value = concat(
+    [
+      for instance in aws_instance.web : {
+        ssh_hostname = instance.public_ip
+        ssh_user     = "ubuntu"
+        ssh_key      = "~/.ssh/my-key.pem"
+        role         = "webserver"
+        instance_id  = instance.id
+      }
+    ],
+    [{
+      ssh_hostname = aws_instance.db.public_ip
+      ssh_user     = "ubuntu"
+      ssh_key      = "~/.ssh/my-key.pem"
+      role         = "database"
+      instance_id  = aws_instance.db.id
+    }]
+  )
+}
+```
+
+```shell
+# Apply terraform
+cd terraform
+terraform apply
+
+# Deploy with pyinfra
+cd ..
+pyinfra @terraform deploy.py
+```
+
+### Nested Outputs
+
+Access nested output structures:
+
+```hcl
+# terraform/main.tf
+output "infrastructure" {
+  value = {
+    production = {
+      web_servers = [
+        aws_instance.prod_web[0].public_ip,
+        aws_instance.prod_web[1].public_ip,
+      ]
+    }
+    staging = {
+      web_servers = [
+        aws_instance.staging_web.public_ip,
+      ]
+    }
+  }
+}
+```
+
+```shell
+# Deploy to production
+pyinfra @terraform/infrastructure.value.production.web_servers deploy.py
+
+# Deploy to staging
+pyinfra @terraform/infrastructure.value.staging.web_servers deploy.py
+```
+
+## Default Output Name
+
+If no output name is specified, the connector looks for `pyinfra_inventory.value`:
+
+```hcl
+# terraform/main.tf
+output "pyinfra_inventory" {
+  value = [
+    "192.168.1.10",
+    "192.168.1.11",
+  ]
+}
+```
+
+```shell
+# These are equivalent
+pyinfra @terraform deploy.py
+pyinfra @terraform/pyinfra_inventory.value deploy.py
+```
+
+## SSH Configuration
+
+Set SSH connection details in Terraform outputs:
+
+```hcl
+# terraform/outputs.tf
+output "pyinfra_inventory" {
+  value = [
+    {
+      ssh_hostname = aws_instance.server.public_ip
+      ssh_user     = "ubuntu"
+      ssh_key      = "~/.ssh/aws-key.pem"
+      ssh_port     = 22
+    },
+  ]
+}
+```
+
+Available SSH data keys:
+- `ssh_hostname` - Hostname or IP
+- `ssh_user` - SSH username
+- `ssh_key` - Path to private key
+- `ssh_password` - SSH password (not recommended)
+- `ssh_port` - SSH port (default: 22)
+- `ssh_forward_agent` - Enable agent forwarding
+
+## Workflow
+
+Typical Terraform + pyinfra workflow:
+
+```shell
+# 1. Write Terraform configuration
+cat > main.tf <<EOF
+output "pyinfra_inventory" {
+  value = ["192.168.1.10"]
+}
+EOF
+
+# 2. Apply Terraform
+terraform init
+terraform apply
+
+# 3. Verify output
+terraform output -json
+
+# 4. Deploy with pyinfra
+pyinfra @terraform deploy.py
+
+# 5. Make changes and re-apply
+vi main.tf
+terraform apply
+pyinfra @terraform deploy.py
+```
+
+## Multiple Environments
+
+Manage multiple environments with Terraform workspaces:
+
+```shell
+# Create workspaces
+terraform workspace new staging
+terraform workspace new production
+
+# Deploy to staging
+terraform workspace select staging
+terraform apply
+pyinfra @terraform deploy_staging.py
+
+# Deploy to production
+terraform workspace select production
+terraform apply
+pyinfra @terraform deploy_production.py
+```
+
+## Error Handling
+
+The connector validates Terraform output:
+
+```shell
+# If output not found
+pyinfra @terraform/missing_output deploy.py
+# Error: Terraform output missing_output not found
+# Available outputs:
+#    - pyinfra_inventory.value
+#    - web_servers.value
+```
+
+## Testing
+
+Test Terraform outputs before deploying:
+
+```shell
+# Dry run
+pyinfra @terraform deploy.py --dry
+
+# Check inventory
+pyinfra @terraform --facts server.Hostname
+```
+
+## Limitations
+
+<Warning>
+- Requires Terraform CLI in PATH
+- Must run from directory with Terraform state
+- Output must be valid JSON
+- Re-reads output on each run (can be slow for large state)
+</Warning>
+
+## Best Practices
+
+1. **Use descriptive output names**
+   ```hcl
+   output "web_servers" { ... }
+   output "database_servers" { ... }
+   ```
+
+2. **Include necessary SSH data**
+   ```hcl
+   output "pyinfra_inventory" {
+     value = [{
+       ssh_hostname = ...
+       ssh_user = ...
+       ssh_key = ...
+     }]
+   }
+   ```
+
+3. **Add host data for conditional deploys**
+   ```hcl
+   output "pyinfra_inventory" {
+     value = [{
+       ssh_hostname = ...
+       role = "web"
+       environment = "production"
+     }]
+   }
+   ```
+
+4. **Use Terraform outputs for dynamic data**
+   ```hcl
+   output "pyinfra_inventory" {
+     value = [{
+       ssh_hostname = ...
+       db_host = aws_db_instance.main.endpoint
+       redis_host = aws_elasticache_cluster.main.cache_nodes[0].address
+     }]
+   }
+   ```
+
+## Complete Example
+
+Here's a complete example with Terraform and pyinfra:
+
+```hcl
+# terraform/main.tf
+output "pyinfra_inventory" {
+  value = [
+    {
+      ssh_hostname = "web1.example.com"
+      ssh_user = "ubuntu"
+      ssh_key = "~/.ssh/id_rsa"
+      role = "webserver"
+      datacenter = "us-east-1"
+    },
+    {
+      ssh_hostname = "web2.example.com"
+      ssh_user = "ubuntu"
+      ssh_key = "~/.ssh/id_rsa"
+      role = "webserver"
+      datacenter = "us-west-2"
+    },
+  ]
+}
+```
+
+```python
+# deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files
+
+# Install packages based on role
+if host.data.role == "webserver":
+    apt.packages(
+        name="Install web server",
+        packages=["nginx"],
+        _sudo=True,
+    )
+    
+    # Configure based on datacenter
+    files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/nginx.conf",
+        datacenter=host.data.datacenter,
+        _sudo=True,
+    )
+```
+
+```shell
+# Deploy
+cd terraform && terraform apply && cd ..
+pyinfra @terraform deploy.py
+```
+
+## Source Reference
+
+Location: `src/pyinfra/connectors/terraform.py:30`
+
+### Key Methods
+
+- `make_names_data()` - Generate hosts from Terraform output (line 83)

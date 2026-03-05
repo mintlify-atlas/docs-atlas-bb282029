@@ -1,0 +1,757 @@
+---
+title: Deploying Applications
+description: Learn how to deploy complete applications with pyinfra, from simple web apps to complex multi-tier systems
+---
+
+This guide walks through deploying real-world applications with pyinfra, from basic web applications to complex multi-tier architectures. You'll learn how to structure deployments, handle dependencies, and create reusable deployment patterns.
+
+## Deployment Structure
+
+A well-organized deployment typically includes:
+
+```
+myapp-deploy/
+├── inventory/
+│   ├── production.py
+│   ├── staging.py
+│   └── development.py
+├── templates/
+│   ├── nginx.conf.j2
+│   ├── app.service.j2
+│   └── env.j2
+├── files/
+│   ├── ssh_keys/
+│   └── ssl/
+├── deploy.py
+└── tasks/
+    ├── web.py
+    ├── database.py
+    └── monitoring.py
+```
+
+## Simple Web Application
+
+Let's start with deploying a Python Flask application.
+
+<Steps>
+  <Step title="Create inventory">
+    ```python inventory.py
+    targets = [
+        ("web-01.example.com", {
+            "ssh_user": "deploy",
+            "ssh_key": "~/.ssh/deploy_key",
+        }),
+    ]
+
+    # Application configuration
+    app_name = "myapp"
+    app_repo = "https://github.com/example/myapp.git"
+    app_branch = "main"
+    app_port = 8000
+    app_workers = 4
+    domain = "myapp.example.com"
+    ```
+  </Step>
+
+  <Step title="Create nginx template">
+    ```jinja templates/nginx.conf.j2
+    server {
+        listen 80;
+        server_name {{ domain }};
+
+        location / {
+            proxy_pass http://127.0.0.1:{{ app_port }};
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /static {
+            alias /opt/{{ app_name }}/static;
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Create systemd service template">
+    ```jinja templates/app.service.j2
+    [Unit]
+    Description={{ app_name }} Application
+    After=network.target
+
+    [Service]
+    Type=simple
+    User={{ app_user }}
+    WorkingDirectory=/opt/{{ app_name }}
+    Environment="PATH=/opt/{{ app_name }}/venv/bin"
+    ExecStart=/opt/{{ app_name }}/venv/bin/gunicorn -w {{ app_workers }} -b 127.0.0.1:{{ app_port }} app:app
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+  </Step>
+
+  <Step title="Create deploy file">
+    ```python deploy.py
+    from pyinfra import host
+    from pyinfra.operations import apt, files, git, server, systemd
+
+    # Install system dependencies
+    apt.packages(
+        name="Install system packages",
+        packages=[
+            "python3",
+            "python3-pip",
+            "python3-venv",
+            "nginx",
+            "git",
+        ],
+        update=True,
+        _sudo=True,
+    )
+
+    # Create application user
+    server.user(
+        name="Create app user",
+        user=host.data.app_name,
+        home=f"/opt/{host.data.app_name}",
+        shell="/bin/bash",
+        system=True,
+        _sudo=True,
+    )
+
+    # Create application directory
+    files.directory(
+        name="Create app directory",
+        path=f"/opt/{host.data.app_name}",
+        user=host.data.app_name,
+        group=host.data.app_name,
+        mode="755",
+        _sudo=True,
+    )
+
+    # Clone application repository
+    git.repo(
+        name="Clone application",
+        src=host.data.app_repo,
+        dest=f"/opt/{host.data.app_name}",
+        branch=host.data.app_branch,
+        pull=True,
+        user=host.data.app_name,
+        _sudo=True,
+    )
+
+    # Create virtual environment
+    server.shell(
+        name="Create Python virtual environment",
+        commands=[
+            f"cd /opt/{host.data.app_name}",
+            "python3 -m venv venv",
+        ],
+        _sudo=True,
+        _sudo_user=host.data.app_name,
+    )
+
+    # Install Python dependencies
+    server.shell(
+        name="Install Python dependencies",
+        commands=[
+            f"cd /opt/{host.data.app_name}",
+            "venv/bin/pip install -r requirements.txt",
+        ],
+        _sudo=True,
+        _sudo_user=host.data.app_name,
+    )
+
+    # Configure systemd service
+    files.template(
+        name="Create systemd service",
+        src="templates/app.service.j2",
+        dest=f"/etc/systemd/system/{host.data.app_name}.service",
+        app_name=host.data.app_name,
+        app_user=host.data.app_name,
+        app_workers=host.data.app_workers,
+        app_port=host.data.app_port,
+        _sudo=True,
+    )
+
+    # Reload systemd
+    systemd.daemon_reload(
+        name="Reload systemd",
+        _sudo=True,
+    )
+
+    # Start and enable application service
+    server.service(
+        name="Start application service",
+        service=host.data.app_name,
+        running=True,
+        enabled=True,
+        restarted=True,
+        _sudo=True,
+    )
+
+    # Configure nginx
+    nginx_config = files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest=f"/etc/nginx/sites-available/{host.data.app_name}",
+        domain=host.data.domain,
+        app_name=host.data.app_name,
+        app_port=host.data.app_port,
+        _sudo=True,
+    )
+
+    # Enable nginx site
+    files.link(
+        name="Enable nginx site",
+        path=f"/etc/nginx/sites-enabled/{host.data.app_name}",
+        target=f"/etc/nginx/sites-available/{host.data.app_name}",
+        _sudo=True,
+    )
+
+    # Remove default nginx site
+    files.file(
+        name="Remove default nginx site",
+        path="/etc/nginx/sites-enabled/default",
+        present=False,
+        _sudo=True,
+    )
+
+    # Restart nginx if config changed
+    server.service(
+        name="Restart nginx",
+        service="nginx",
+        restarted=True,
+        _sudo=True,
+        _if=lambda: nginx_config.did_change(),
+    )
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    pyinfra inventory.py deploy.py
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Use dry-run mode first to preview changes: `pyinfra inventory.py deploy.py --dry`
+</Tip>
+
+## Multi-Tier Application
+
+Deploy an application with separate web and database tiers:
+
+```python inventory.py
+# Web servers
+web_servers = [
+    "web-01.example.com",
+    "web-02.example.com",
+]
+
+web_servers_data = {
+    "app_port": 8000,
+    "app_workers": 4,
+    "db_host": "db-01.example.com",
+}
+
+# Database servers
+db_servers = [
+    ("db-01.example.com", {
+        "ssh_user": "postgres",
+        "is_primary": True,
+    }),
+]
+
+db_servers_data = {
+    "postgres_version": "14",
+    "max_connections": 200,
+}
+
+# All hosts
+targets = web_servers + db_servers
+
+# Global data
+app_name = "myapp"
+app_repo = "https://github.com/example/myapp.git"
+environment = "production"
+```
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files, git, server
+
+# Deploy to database servers
+if "db_servers" in host.groups:
+    apt.packages(
+        name="Install PostgreSQL",
+        packages=[
+            f"postgresql-{host.data.postgres_version}",
+            "postgresql-contrib",
+        ],
+        _sudo=True,
+    )
+    
+    files.template(
+        name="Configure PostgreSQL",
+        src="templates/postgresql.conf.j2",
+        dest=f"/etc/postgresql/{host.data.postgres_version}/main/postgresql.conf",
+        max_connections=host.data.max_connections,
+        _sudo=True,
+    )
+    
+    server.service(
+        name="Restart PostgreSQL",
+        service="postgresql",
+        restarted=True,
+        _sudo=True,
+    )
+
+# Deploy to web servers
+if "web_servers" in host.groups:
+    # Install dependencies
+    apt.packages(
+        name="Install web server packages",
+        packages=["python3", "python3-pip", "nginx", "postgresql-client"],
+        _sudo=True,
+    )
+    
+    # Create app user
+    server.user(
+        name="Create app user",
+        user=host.data.app_name,
+        home=f"/opt/{host.data.app_name}",
+        system=True,
+        _sudo=True,
+    )
+    
+    # Clone application
+    git.repo(
+        name="Clone application",
+        src=host.data.app_repo,
+        dest=f"/opt/{host.data.app_name}",
+        branch="main",
+        pull=True,
+        user=host.data.app_name,
+        _sudo=True,
+    )
+    
+    # Configure application with database connection
+    files.template(
+        name="Configure application",
+        src="templates/app_config.py.j2",
+        dest=f"/opt/{host.data.app_name}/config.py",
+        db_host=host.data.db_host,
+        app_port=host.data.app_port,
+        environment=host.data.environment,
+        user=host.data.app_name,
+        _sudo=True,
+    )
+    
+    # Install dependencies and start service
+    server.shell(
+        name="Install Python dependencies",
+        commands=[
+            f"cd /opt/{host.data.app_name}",
+            "pip3 install -r requirements.txt",
+        ],
+        _sudo=True,
+        _sudo_user=host.data.app_name,
+    )
+```
+
+## Reusable Deploy Functions
+
+Create modular, reusable deployment components:
+
+```python tasks/web.py
+from pyinfra import host
+from pyinfra.api import deploy
+from pyinfra.operations import apt, files, git, server
+
+@deploy("Setup web server")
+def setup_web_server():
+    """Install and configure nginx web server"""
+    
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+    
+    files.template(
+        name="Configure nginx",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/nginx.conf",
+        workers=host.data.get("nginx_workers", 4),
+        _sudo=True,
+    )
+    
+    server.service(
+        name="Ensure nginx is running",
+        service="nginx",
+        running=True,
+        enabled=True,
+        _sudo=True,
+    )
+
+@deploy("Deploy Python application")
+def deploy_python_app(app_name, repo_url, branch="main"):
+    """Deploy a Python application"""
+    
+    # Create user
+    server.user(
+        name=f"Create {app_name} user",
+        user=app_name,
+        home=f"/opt/{app_name}",
+        system=True,
+        _sudo=True,
+    )
+    
+    # Clone repo
+    git.repo(
+        name=f"Clone {app_name}",
+        src=repo_url,
+        dest=f"/opt/{app_name}",
+        branch=branch,
+        pull=True,
+        user=app_name,
+        _sudo=True,
+    )
+    
+    # Create venv and install deps
+    server.shell(
+        name="Setup Python environment",
+        commands=[
+            f"cd /opt/{app_name}",
+            "python3 -m venv venv",
+            "venv/bin/pip install -r requirements.txt",
+        ],
+        _sudo=True,
+        _sudo_user=app_name,
+    )
+```
+
+Use in main deploy:
+
+```python deploy.py
+from pyinfra import host
+from tasks.web import setup_web_server, deploy_python_app
+
+if "web_servers" in host.groups:
+    setup_web_server()
+    deploy_python_app(
+        app_name=host.data.app_name,
+        repo_url=host.data.app_repo,
+        branch=host.data.app_branch,
+    )
+```
+
+## Handling Secrets
+
+<Note>
+  Never commit secrets to version control. Use environment variables or external secret management.
+</Note>
+
+### Using Environment Variables
+
+```python inventory.py
+import os
+
+targets = ["web-01.example.com"]
+
+# Load secrets from environment
+database_password = os.environ.get("DATABASE_PASSWORD")
+api_key = os.environ.get("API_KEY")
+secret_key = os.environ.get("SECRET_KEY")
+```
+
+Set before deploying:
+
+```bash
+export DATABASE_PASSWORD="secret"
+export API_KEY="key123"
+export SECRET_KEY="random-secret"
+pyinfra inventory.py deploy.py
+```
+
+### Using .env Files
+
+```python inventory.py
+from pathlib import Path
+
+# Load .env file (not committed to git)
+env_file = Path(".env")
+if env_file.exists():
+    for line in env_file.read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            os.environ[key] = value
+
+targets = ["web-01.example.com"]
+database_password = os.environ.get("DATABASE_PASSWORD")
+```
+
+## Database Migrations
+
+Run database migrations as part of deployment:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import server
+
+if "web_servers" in host.groups:
+    # Deploy application first...
+    
+    # Run database migrations
+    server.shell(
+        name="Run database migrations",
+        commands=[
+            f"cd /opt/{host.data.app_name}",
+            "venv/bin/python manage.py migrate",
+        ],
+        _sudo=True,
+        _sudo_user=host.data.app_name,
+    )
+    
+    # Collect static files
+    server.shell(
+        name="Collect static files",
+        commands=[
+            f"cd /opt/{host.data.app_name}",
+            "venv/bin/python manage.py collectstatic --noinput",
+        ],
+        _sudo=True,
+        _sudo_user=host.data.app_name,
+    )
+```
+
+## Zero-Downtime Deployments
+
+Deploy updates without downtime:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import files, git, server
+
+# Update code
+git.repo(
+    name="Pull latest code",
+    src=host.data.app_repo,
+    dest=f"/opt/{host.data.app_name}",
+    branch=host.data.app_branch,
+    pull=True,
+    user=host.data.app_name,
+    _sudo=True,
+)
+
+# Install any new dependencies
+server.shell(
+    name="Update dependencies",
+    commands=[
+        f"cd /opt/{host.data.app_name}",
+        "venv/bin/pip install -r requirements.txt",
+    ],
+    _sudo=True,
+    _sudo_user=host.data.app_name,
+)
+
+# Graceful reload (for gunicorn/uwsgi)
+server.shell(
+    name="Graceful reload",
+    commands=[f"systemctl reload {host.data.app_name}"],
+    _sudo=True,
+)
+```
+
+## Complete Example: Django Application
+
+<CodeGroup>
+```python inventory.py
+targets = [
+    ("web-01.example.com", {
+        "ssh_user": "deploy",
+        "ssh_key": "~/.ssh/deploy_key",
+    }),
+]
+
+app_name = "django_app"
+app_repo = "https://github.com/example/django-app.git"
+app_branch = "main"
+app_port = 8000
+app_workers = 4
+domain = "example.com"
+
+# Database config
+db_name = "django_db"
+db_user = "django_user"
+db_host = "localhost"
+```
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files, git, postgresql, server, systemd
+
+# Install system packages
+apt.packages(
+    name="Install system packages",
+    packages=[
+        "python3",
+        "python3-pip",
+        "python3-venv",
+        "postgresql",
+        "postgresql-contrib",
+        "nginx",
+        "git",
+    ],
+    update=True,
+    _sudo=True,
+)
+
+# Create PostgreSQL database and user
+postgresql.database(
+    name="Create database",
+    database=host.data.db_name,
+    _sudo=True,
+    _sudo_user="postgres",
+)
+
+postgresql.user(
+    name="Create database user",
+    user=host.data.db_user,
+    password=host.data.db_password,
+    _sudo=True,
+    _sudo_user="postgres",
+)
+
+# Create app user
+server.user(
+    name="Create app user",
+    user=host.data.app_name,
+    home=f"/opt/{host.data.app_name}",
+    system=True,
+    _sudo=True,
+)
+
+# Clone application
+git.repo(
+    name="Clone application",
+    src=host.data.app_repo,
+    dest=f"/opt/{host.data.app_name}",
+    branch=host.data.app_branch,
+    pull=True,
+    user=host.data.app_name,
+    _sudo=True,
+)
+
+# Setup Python environment
+server.shell(
+    name="Create virtual environment",
+    commands=[
+        f"cd /opt/{host.data.app_name}",
+        "python3 -m venv venv",
+        "venv/bin/pip install -r requirements.txt",
+    ],
+    _sudo=True,
+    _sudo_user=host.data.app_name,
+)
+
+# Configure Django settings
+files.template(
+    name="Configure Django",
+    src="templates/django_settings.py.j2",
+    dest=f"/opt/{host.data.app_name}/config/settings.py",
+    db_name=host.data.db_name,
+    db_user=host.data.db_user,
+    db_password=host.data.db_password,
+    db_host=host.data.db_host,
+    secret_key=host.data.secret_key,
+    user=host.data.app_name,
+    _sudo=True,
+)
+
+# Run migrations
+server.shell(
+    name="Run Django migrations",
+    commands=[
+        f"cd /opt/{host.data.app_name}",
+        "venv/bin/python manage.py migrate",
+        "venv/bin/python manage.py collectstatic --noinput",
+    ],
+    _sudo=True,
+    _sudo_user=host.data.app_name,
+)
+
+# Configure systemd service
+files.template(
+    name="Create systemd service",
+    src="templates/gunicorn.service.j2",
+    dest=f"/etc/systemd/system/{host.data.app_name}.service",
+    _sudo=True,
+)
+
+systemd.daemon_reload(name="Reload systemd", _sudo=True)
+
+server.service(
+    name="Start application",
+    service=host.data.app_name,
+    running=True,
+    enabled=True,
+    restarted=True,
+    _sudo=True,
+)
+
+# Configure nginx
+files.template(
+    name="Configure nginx",
+    src="templates/nginx.conf.j2",
+    dest=f"/etc/nginx/sites-available/{host.data.app_name}",
+    _sudo=True,
+)
+
+files.link(
+    name="Enable nginx site",
+    path=f"/etc/nginx/sites-enabled/{host.data.app_name}",
+    target=f"/etc/nginx/sites-available/{host.data.app_name}",
+    _sudo=True,
+)
+
+server.service(
+    name="Restart nginx",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+)
+```
+</CodeGroup>
+
+## Best Practices
+
+<Tip>
+  **Structure your deploys** - Split complex deployments into modular functions using `@deploy`
+</Tip>
+
+<Tip>
+  **Test locally first** - Use `@local` or `@docker` connectors to test deploys before running on production
+</Tip>
+
+<Tip>
+  **Use dry-run mode** - Always check what will change with `--dry` before deploying to production
+</Tip>
+
+<Tip>
+  **Keep secrets secure** - Use environment variables or secret management tools, never commit secrets
+</Tip>
+
+<Tip>
+  **Version your infrastructure** - Commit inventory and deploy files to git for version control
+</Tip>
+
+## Next Steps
+
+- [Idempotent Operations](/guides/idempotent-operations) - Understand state management
+- [Parallel Execution](/guides/parallel-execution) - Scale deployments across many hosts
+- [Inventory and Data](/guides/inventory-and-data) - Advanced inventory patterns

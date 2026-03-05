@@ -1,0 +1,258 @@
+---
+title: choco Operations
+description: Manage Chocolatey packages on Windows
+icon: windows
+---
+
+The `choco` module manages packages on Windows using the Chocolatey package manager.
+
+## Functions
+
+### packages
+
+Install, remove, or update Chocolatey packages.
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Install development tools",
+    packages=["git", "vscode"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like gem: `<pkg>:<version>`
+</Note>
+
+#### Example
+
+```python
+from pyinfra.operations import choco
+
+# Note: Assumes that 'choco' is installed and
+#       user has Administrator permission.
+choco.packages(
+    name="Install Notepad++",
+    packages=["notepadplusplus"],
+)
+```
+
+---
+
+### install
+
+Install Chocolatey package manager.
+
+```python
+from pyinfra.operations import choco
+
+choco.install(
+    name="Install Chocolatey",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+<Note>
+  Requires Administrator permissions to install Chocolatey.
+</Note>
+
+## Common Use Cases
+
+### Install Chocolatey and Packages
+
+```python
+from pyinfra.operations import choco
+
+# Install Chocolatey
+choco.install(
+    name="Install Chocolatey package manager",
+)
+
+# Install packages
+choco.packages(
+    name="Install essential tools",
+    packages=[
+        "git",
+        "vscode",
+        "googlechrome",
+        "7zip",
+    ],
+)
+```
+
+### Development Environment
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Install development tools",
+    packages=[
+        "git",
+        "nodejs",
+        "python",
+        "vscode",
+        "postman",
+        "docker-desktop",
+    ],
+)
+```
+
+### Web Server Setup
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Install web server components",
+    packages=[
+        "nginx",
+        "php",
+        "mysql",
+    ],
+)
+```
+
+### Install with Specific Versions
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Install specific versions",
+    packages=[
+        "python:3.11.0",
+        "nodejs:18.16.0",
+    ],
+)
+```
+
+### System Utilities
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Install system utilities",
+    packages=[
+        "7zip",
+        "notepadplusplus",
+        "googlechrome",
+        "firefox",
+        "vlc",
+        "windirstat",
+    ],
+)
+```
+
+### Update All Packages
+
+```python
+from pyinfra.operations import choco
+
+choco.packages(
+    name="Update all packages to latest",
+    packages=["all"],
+    latest=True,
+)
+```
+
+## Chocolatey-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Administrator Permissions Required">
+    Most Chocolatey operations require Administrator privileges. Ensure pyinfra is running with elevated permissions:
+    
+    ```python
+    # Run PowerShell as Administrator or use:
+    # pyinfra @winrm/administrator:password@hostname deploy.py
+    ```
+  </Accordion>
+
+  <Accordion title="Checking Installed Packages">
+    List all installed Chocolatey packages:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="List installed packages",
+        commands=["choco list --local-only"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Search for Packages">
+    Search the Chocolatey repository:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Search for packages",
+        commands=["choco search nodejs"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Package Sources">
+    Add custom package sources:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Add custom source",
+        commands=[
+            'choco source add -n="MySource" -s="https://mypackages.com/chocolatey"',
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Installation Options">
+    Pass additional options to Chocolatey:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Install with parameters
+    server.shell(
+        name="Install with custom options",
+        commands=[
+            'choco install nodejs -y --version=18.16.0 --params="/InstallDir:C:\\NodeJS"',
+        ],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Warning>
+  Chocolatey requires PowerShell and .NET Framework to be installed on the target Windows system.
+</Warning>
+
+<Note>
+  All `choco` commands in pyinfra automatically include the `-y` flag for non-interactive installations.
+</Note>
+
+<Tip>
+  For Windows Server management, consider using `pyinfra @winrm` connection method for remote deployments.
+</Tip>

@@ -1,0 +1,379 @@
+---
+title: Server Facts
+description: Gather system information from target hosts
+---
+
+Server facts provide information about the operating system, users, processes, and system configuration of target hosts.
+
+## System Information
+
+### Hostname
+
+Get the current hostname:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import Hostname
+
+hostname = host.get_fact(Hostname)
+print(f"Hostname: {hostname}")
+```
+
+**Returns:** `str` - The hostname
+
+### Kernel
+
+Get the kernel name:
+
+```python
+from pyinfra.facts.server import Kernel
+
+kernel = host.get_fact(Kernel)
+# Returns: "Linux" or "Darwin" or "FreeBSD"
+```
+
+**Returns:** `str` - Kernel name from `uname -s`
+
+### KernelVersion
+
+Get the kernel version:
+
+```python
+from pyinfra.facts.server import KernelVersion
+
+version = host.get_fact(KernelVersion)
+# Returns: "5.15.0-56-generic" or similar
+```
+
+**Returns:** `str` - Kernel version from `uname -r`
+
+### Arch
+
+Get the system architecture:
+
+```python
+from pyinfra.facts.server import Arch
+
+arch = host.get_fact(Arch)
+# Returns: "x86_64", "aarch64", "armv7l", etc.
+```
+
+**Returns:** `str` - Architecture from `uname -m`
+
+### LinuxDistribution
+
+Get detailed Linux distribution information:
+
+```python
+from pyinfra.facts.server import LinuxDistribution
+
+distro = host.get_fact(LinuxDistribution)
+print(f"OS: {distro['name']} {distro['version']}")
+print(f"Release: {distro['release_meta']['VERSION_ID']}")
+```
+
+**Returns:** `dict` with keys:
+- `name` - Distribution name ("Ubuntu", "CentOS", "Debian", etc.)
+- `version` - Version string
+- `major` - Major version number
+- `minor` - Minor version number  
+- `release_meta` - Additional release info
+
+## Users and Groups
+
+### User
+
+Get current username:
+
+```python
+from pyinfra.facts.server import User
+
+username = host.get_fact(User)
+print(f"Current user: {username}")
+```
+
+**Returns:** `str` - Current username
+
+### Home
+
+Get home directory:
+
+```python
+from pyinfra.facts.server import Home
+
+# Current user's home
+home = host.get_fact(Home)
+# Returns: "/home/ubuntu"
+
+# Specific user's home
+nginx_home = host.get_fact(Home, user="nginx")
+# Returns: "/var/www"
+```
+
+**Parameters:**
+- `user` (str, optional) - Username to get home for
+
+**Returns:** `str` - Home directory path
+
+### UsersAndGroups
+
+Get all users and groups:
+
+```python
+from pyinfra.facts.server import UsersAndGroups
+
+data = host.get_fact(UsersAndGroups)
+print(f"Users: {list(data['users'].keys())}")
+print(f"Groups: {list(data['groups'].keys())}")
+```
+
+**Returns:** `dict` with:
+- `users` - Dict of username -> user info
+- `groups` - Dict of groupname -> group info
+
+### Groups
+
+Get list of all groups:
+
+```python
+from pyinfra.facts.server import Groups
+
+groups = host.get_fact(Groups)
+# Returns: ["root", "daemon", "sudo", "users", ...]
+```
+
+**Returns:** `list[str]` - List of group names
+
+## Environment
+
+### Path
+
+Get the PATH environment variable:
+
+```python
+from pyinfra.facts.server import Path
+
+path = host.get_fact(Path)
+# Returns: "/usr/local/bin:/usr/bin:/bin"
+```
+
+**Returns:** `str` - PATH variable value
+
+### TmpDir
+
+Get the temporary directory:
+
+```python
+from pyinfra.facts.server import TmpDir
+
+tmp_dir = host.get_fact(TmpDir)
+# Returns: "/tmp" or value of $TMPDIR
+```
+
+**Returns:** `str` - Temporary directory path
+
+Checks in order:
+1. `$TMPDIR` if set and writable
+2. `$TMP` if set and writable
+3. `$TEMP` if set and writable  
+4. Empty string if none available
+
+## Command Utilities
+
+### Which
+
+Check if a command exists and get its path:
+
+```python
+from pyinfra.facts.server import Which
+
+# Check if nginx is installed
+nginx_path = host.get_fact(Which, command="nginx")
+if nginx_path:
+    print(f"nginx found at: {nginx_path}")
+else:
+    print("nginx not installed")
+```
+
+**Parameters:**
+- `command` (str, required) - Command name to locate
+
+**Returns:** `str | None` - Full path to command, or None if not found
+
+### Command
+
+Execute arbitrary command and get output:
+
+```python
+from pyinfra.facts.server import Command
+
+# Get output of command
+output = host.get_fact(Command, command="ls /tmp")
+print(output)
+```
+
+**Parameters:**
+- `command` (str, required) - Command to execute
+
+**Returns:** `str` - Command output
+
+<Warning>
+Prefer specific facts over `Command` when available. For example, use `Which` instead of `Command(command="which nginx")`.
+</Warning>
+
+## Date and Time
+
+### Date
+
+Get current date/time:
+
+```python
+from pyinfra.facts.server import Date
+from datetime import datetime
+
+date = host.get_fact(Date)
+print(f"Server time: {date}")
+```
+
+**Returns:** `datetime` - Current date and time on the host
+
+## Processes
+
+### ProcessSnapshot
+
+Get running processes:
+
+```python
+from pyinfra.facts.server import ProcessSnapshot
+
+processes = host.get_fact(ProcessSnapshot)
+for pid, proc in processes.items():
+    print(f"{pid}: {proc['command']}")
+```
+
+**Returns:** `dict` - Process ID -> process info
+
+## System Resources
+
+### Memory
+
+Get memory information:
+
+```python
+from pyinfra.facts.server import Memory
+
+mem = host.get_fact(Memory)
+print(f"Total: {mem['MemTotal']} kB")
+print(f"Free: {mem['MemFree']} kB")
+```
+
+**Returns:** `dict` - Memory information from `/proc/meminfo`
+
+### Mounts
+
+Get mounted filesystems:
+
+```python
+from pyinfra.facts.server import Mounts
+
+mounts = host.get_fact(Mounts)
+for mount_point, info in mounts.items():
+    print(f"{mount_point}: {info['device']} ({info['type']})")
+```
+
+**Returns:** `dict` - Mount point -> mount info
+
+## Complete Example
+
+Here's a complete example using server facts:
+
+```python
+from pyinfra import host
+from pyinfra.facts.server import (
+    Hostname,
+    LinuxDistribution,
+    Arch,
+    KernelVersion,
+    Memory,
+    Which,
+    Home,
+)
+from pyinfra.operations import apt, files
+
+# Get system information
+hostname = host.get_fact(Hostname)
+distro = host.get_fact(LinuxDistribution)
+arch = host.get_fact(Arch)
+kernel = host.get_fact(KernelVersion)
+mem = host.get_fact(Memory)
+
+# Log system info
+print(f"""\n=== System Information ===""")
+print(f"Hostname: {hostname}")
+print(f"OS: {distro['name']} {distro['version']}")
+print(f"Architecture: {arch}")
+print(f"Kernel: {kernel}")
+print(f"Memory: {int(mem['MemTotal']) // 1024} MB")
+print()
+
+# Check if required tools are installed
+required_tools = ["git", "curl", "vim"]
+missing_tools = []
+
+for tool in required_tools:
+    if not host.get_fact(Which, command=tool):
+        missing_tools.append(tool)
+
+if missing_tools:
+    print(f"Installing missing tools: {', '.join(missing_tools)}")
+    apt.packages(
+        name="Install required tools",
+        packages=missing_tools,
+        _sudo=True,
+    )
+
+# Create directories based on user
+current_user = host.get_fact(Home)
+files.directory(
+    name="Create projects directory",
+    path=f"{current_user}/projects",
+    present=True,
+)
+
+# Conditional operations based on distribution
+if distro["name"] == "Ubuntu" and distro["major"] >= 20:
+    apt.packages(
+        name="Install Ubuntu 20+ packages",
+        packages=["systemd", "ufw"],
+        _sudo=True,
+    )
+elif distro["name"] == "Debian":
+    apt.packages(
+        name="Install Debian packages",
+        packages=["systemd", "iptables"],
+        _sudo=True,
+    )
+
+# Check available memory and warn if low
+mem_total_mb = int(mem['MemTotal']) // 1024
+mem_free_mb = int(mem['MemFree']) // 1024
+
+if mem_free_mb < 512:
+    print(f"⚠️  Warning: Low memory ({mem_free_mb} MB free)")
+```
+
+## Source Reference
+
+Location: `src/pyinfra/facts/server.py`
+
+### Key Facts
+
+- `Hostname` - Get hostname (line 79)
+- `Kernel` - Get kernel name (line 89)
+- `KernelVersion` - Get kernel version (line 99)
+- `Arch` - Get architecture (line 137)
+- `LinuxDistribution` - Get distribution info
+- `User` - Get current user (line 23)
+- `Home` - Get home directory (line 33)
+- `Which` - Find command path
+- `Command` - Execute command (line 149)

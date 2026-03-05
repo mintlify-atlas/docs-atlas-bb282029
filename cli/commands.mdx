@@ -1,0 +1,300 @@
+---
+title: "CLI Commands"
+description: "Detailed reference for pyinfra CLI command modes"
+---
+
+## Command Modes
+
+pyinfra supports five primary command modes, each designed for different use cases.
+
+## Deploy Files
+
+Execute one or more Python deploy files containing operations.
+
+### Syntax
+
+```bash
+pyinfra INVENTORY deploy_file.py [additional_files.py]...
+```
+
+### Description
+
+Deploy files are Python scripts that define operations to execute on target hosts. All files must have a `.py` extension. pyinfra will load and execute each file in sequence.
+
+### Examples
+
+**Single deploy file:**
+
+```bash
+pyinfra inventory.py deploy_web.py
+```
+
+**Multiple deploy files:**
+
+```bash
+pyinfra inventory.py deploy_web.py deploy_db.py deploy_cache.py
+```
+
+**With working directory:**
+
+```bash
+pyinfra inventory.py deploy.py --chdir /path/to/project
+```
+
+### Behavior
+
+- Files are executed in the order specified
+- Each file can modify config, which is reset after execution
+- Operations are collected during file execution and run later
+- File paths are resolved relative to the current working directory (or `--chdir` if specified)
+
+---
+
+## Operations
+
+Execute a single operation directly from the command line.
+
+### Syntax
+
+```bash
+pyinfra INVENTORY module.operation [args] [key=value]...
+```
+
+### Description
+
+Run a specific operation from the pyinfra operations library. The operation name must contain a dot (e.g., `server.user`, `apt.packages`).
+
+### Examples
+
+**Create a user:**
+
+```bash
+pyinfra inventory.py server.user pyinfra home=/home/pyinfra
+```
+
+**Install packages:**
+
+```bash
+pyinfra inventory.py apt.packages nginx present=true
+```
+
+**Create a file:**
+
+```bash
+pyinfra inventory.py files.file path=/etc/config.txt user=root mode=644
+```
+
+### Argument Formats
+
+**Positional arguments:**
+
+```bash
+pyinfra inventory.py server.user pyinfra
+```
+
+**Keyword arguments:**
+
+```bash
+pyinfra inventory.py server.user username=pyinfra home=/home/pyinfra
+```
+
+**JSON format:**
+
+```bash
+pyinfra inventory.py server.user '[["pyinfra"], {"home": "/home/pyinfra"}]'
+```
+
+### Type Parsing
+
+Arguments are automatically parsed:
+- `true`, `false` → Boolean
+- Numbers → Integer or float
+- Strings in quotes → String
+- Bare words → String
+
+---
+
+## Exec (Shell Commands)
+
+Execute arbitrary shell commands on target hosts.
+
+### Syntax
+
+```bash
+pyinfra INVENTORY exec -- COMMAND [ARGS]...
+```
+
+### Description
+
+Run raw shell commands across all target hosts. The `--` separator is required to distinguish the command from pyinfra options.
+
+### Examples
+
+**Simple command:**
+
+```bash
+pyinfra inventory.py exec -- echo "hello world"
+```
+
+**Check disk space:**
+
+```bash
+pyinfra inventory.py exec -- df -h
+```
+
+**Restart service:**
+
+```bash
+pyinfra inventory.py exec -- systemctl restart nginx
+```
+
+**Multiple commands:**
+
+```bash
+pyinfra inventory.py exec -- 'cd /app && git pull && systemctl restart app'
+```
+
+### Behavior
+
+- Output is printed to the console in real-time
+- The command is executed using `server.shell` operation
+- Exit codes are captured and reported
+- Retries are configured via `--retry` and `--retry-delay` options
+
+---
+
+## Facts
+
+Gather facts (system information) from target hosts.
+
+### Syntax
+
+```bash
+pyinfra INVENTORY fact module.FactName [key=value]... [module.AnotherFact]...
+```
+
+### Description
+
+Collect facts about the target systems without making changes. Facts provide information about the current state of hosts.
+
+### Examples
+
+**Single fact:**
+
+```bash
+pyinfra inventory.py fact server.LinuxName
+```
+
+**Multiple facts:**
+
+```bash
+pyinfra inventory.py fact server.LinuxName server.Users server.Hostname
+```
+
+**Fact with arguments:**
+
+```bash
+pyinfra inventory.py fact files.File path=/etc/config.txt
+```
+
+**Multiple facts with arguments:**
+
+```bash
+pyinfra inventory.py fact files.File path=/etc/hosts files.File path=/etc/resolv.conf
+```
+
+### Common Facts
+
+- `server.LinuxName` - Linux distribution name
+- `server.Users` - List of system users
+- `server.Hostname` - System hostname
+- `server.Os` - Operating system type
+- `files.File` - File information (requires `path=` argument)
+- `files.Directory` - Directory information
+- `server.Date` - System date and time
+
+### Output
+
+Facts are displayed in a structured format showing:
+- Fact name and arguments
+- Results for each host
+- Any errors encountered
+
+---
+
+## Debug Inventory
+
+Inspect and debug inventory configuration.
+
+### Syntax
+
+```bash
+pyinfra INVENTORY debug-inventory
+```
+
+### Description
+
+Display detailed information about the inventory, including:
+- All hosts and their names
+- Host data and variables
+- Group memberships
+- Connection details
+
+### Examples
+
+**Debug inventory file:**
+
+```bash
+pyinfra inventory.py debug-inventory
+```
+
+**Debug with data overrides:**
+
+```bash
+pyinfra inventory.py debug-inventory --data env=production
+```
+
+**Debug with limit:**
+
+```bash
+pyinfra inventory.py debug-inventory --limit webservers
+```
+
+### Output
+
+The command displays:
+- Host count
+- Host names and connection information
+- Data available to each host
+- Group structure
+
+### Use Cases
+
+- Verify inventory is loaded correctly
+- Check host data values
+- Debug group assignments
+- Validate data overrides
+- Test limit patterns
+
+---
+
+## Command Selection Logic
+
+pyinfra automatically determines the command mode based on the operations argument:
+
+1. **`debug-inventory`** → Debug Inventory mode
+2. **`fact`** → Facts mode
+3. **`exec`** → Exec mode
+4. **All arguments end with `.py`** → Deploy Files mode
+5. **First argument contains `.`** → Operations mode
+6. **Otherwise** → Error (invalid operation)
+
+## Error Handling
+
+Each command mode has specific error handling:
+
+- **Deploy Files**: Missing files cause immediate error
+- **Operations**: Invalid operation names are caught on import
+- **Exec**: Command failures are reported but execution continues
+- **Facts**: Missing facts cause warnings, not failures
+- **Debug Inventory**: Connection is not required

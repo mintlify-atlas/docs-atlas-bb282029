@@ -1,0 +1,182 @@
+---
+title: Operations Overview
+description: Complete guide to pyinfra operations for system configuration and package management
+---
+
+Operations are the core of pyinfra - they define the state you want your systems to be in. Each operation is idempotent by default and can be used to manage packages, files, services, and more.
+
+## What are Operations?
+
+Operations are Python functions that:
+- Define the desired state of system resources
+- Generate commands to achieve that state
+- Are idempotent (can be run multiple times safely)
+- Return information about changes made
+
+## Package Manager Operations
+
+Pyinfra supports a wide range of package managers across different operating systems:
+
+### Linux Package Managers
+
+<CardGroup cols={2}>
+  <Card title="apt" icon="ubuntu" href="/operations/apt">
+    Debian/Ubuntu package management with apt-get
+  </Card>
+  <Card title="yum" icon="redhat" href="/operations/yum">
+    RHEL/CentOS package management with yum
+  </Card>
+  <Card title="dnf" icon="fedora" href="/operations/dnf">
+    Fedora/RHEL 8+ package management with dnf
+  </Card>
+  <Card title="apk" icon="mountain" href="/operations/apk">
+    Alpine Linux package management
+  </Card>
+  <Card title="pacman" icon="archlinux" href="/operations/pacman">
+    Arch Linux package management
+  </Card>
+  <Card title="zypper" icon="suse" href="/operations/zypper">
+    openSUSE package management
+  </Card>
+</CardGroup>
+
+### BSD Package Managers
+
+<Card title="pkg" icon="freebsd" href="/operations/pkg">
+  FreeBSD/OpenBSD/NetBSD package management
+</Card>
+
+### macOS Package Managers
+
+<Card title="brew" icon="apple" href="/operations/brew">
+  Homebrew package management for macOS
+</Card>
+
+### Windows Package Managers
+
+<Card title="choco" icon="windows" href="/operations/choco">
+  Chocolatey package management for Windows
+</Card>
+
+### Language-Specific Package Managers
+
+<CardGroup cols={2}>
+  <Card title="pip" icon="python" href="/operations/pip">
+    Python package management with pip
+  </Card>
+  <Card title="pipx" icon="python" href="/operations/pipx">
+    Python application management with pipx
+  </Card>
+  <Card title="npm" icon="node-js" href="/operations/npm">
+    Node.js package management with npm
+  </Card>
+  <Card title="gem" icon="gem" href="/operations/gem">
+    Ruby gem package management
+  </Card>
+  <Card title="cargo" icon="rust" href="/operations/cargo">
+    Rust package management with cargo
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Installing Packages
+
+```python
+from pyinfra.operations import apt
+
+apt.packages(
+    name="Install web server packages",
+    packages=["nginx", "certbot"],
+    update=True,
+)
+```
+
+### Version Pinning
+
+Most package managers support version pinning:
+
+```python
+# apt uses = for versions
+apt.packages(
+    packages=["nginx=1.18.0-0ubuntu1"],
+)
+
+# npm uses @ for versions
+npm.packages(
+    packages=["express@4.18.0"],
+)
+```
+
+### Ensuring Latest Versions
+
+```python
+apt.packages(
+    name="Ensure latest versions",
+    packages=["vim", "git"],
+    latest=True,
+)
+```
+
+## Operation Arguments
+
+Most operations share common arguments:
+
+- `name`: Description of what the operation does (optional but recommended)
+- `packages`: List of packages to manage
+- `present`: Whether packages should be installed (default: `True`)
+- `latest`: Whether to upgrade to latest version
+- `update`: Run package index update before installing
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always use descriptive names">
+    ```python
+    # Good
+    apt.packages(
+        name="Install PostgreSQL database server",
+        packages=["postgresql", "postgresql-contrib"],
+    )
+    
+    # Less helpful
+    apt.packages(
+        packages=["postgresql", "postgresql-contrib"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Update package indexes when needed">
+    ```python
+    apt.packages(
+        name="Install packages with fresh index",
+        packages=["nginx"],
+        update=True,
+        cache_time=3600,  # Cache for 1 hour
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Pin versions for reproducibility">
+    ```python
+    pip.packages(
+        name="Install specific versions for production",
+        packages=[
+            "django==4.2.0",
+            "psycopg2==2.9.5",
+        ],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="System Operations" icon="server" href="/operations/server">
+    Learn about file, directory, and system operations
+  </Card>
+  <Card title="Service Management" icon="gear" href="/operations/systemd">
+    Manage systemd and other init systems
+  </Card>
+</CardGroup>

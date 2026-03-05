@@ -1,0 +1,153 @@
+---
+title: selinux
+description: Manage SELinux file contexts, booleans and port types
+---
+
+Provides operations to set SELinux file contexts, booleans and port types.
+
+## Functions
+
+### `selinux.boolean`
+
+Set the specified SELinux boolean to the desired state.
+
+```python
+selinux.boolean(
+    bool_name,
+    value,
+    persistent=False,
+)
+```
+
+<ParamField name="bool_name" type="str" required>
+  Name of an SELinux boolean
+</ParamField>
+
+<ParamField name="value" type="Boolean" required>
+  Desired state of the boolean (Boolean.ON or Boolean.OFF)
+</ParamField>
+
+<ParamField name="persistent" type="bool" default="False">
+  Whether to write updated policy or not
+</ParamField>
+
+<Note>
+This operation requires root privileges.
+</Note>
+
+### `selinux.file_context`
+
+Set the SELinux type for the specified path to the specified value.
+
+```python
+selinux.file_context(
+    path,
+    se_type,
+)
+```
+
+<ParamField name="path" type="str" required>
+  The target path (expression) for the context
+</ParamField>
+
+<ParamField name="se_type" type="str" required>
+  The SELinux type for the given target
+</ParamField>
+
+### `selinux.file_context_mapping`
+
+Set the SELinux file context mapping for paths matching the target.
+
+```python
+selinux.file_context_mapping(
+    target,
+    se_type=None,
+    present=True,
+)
+```
+
+<ParamField name="target" type="str" required>
+  The target path (expression) for the context
+</ParamField>
+
+<ParamField name="se_type" type="str" default="None">
+  The SELinux type for the given target
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether to add or remove the target -> context mapping
+</ParamField>
+
+<Note>
+`file_context_mapping` does not change the SELinux file context for existing files so `restorecon` may need to be run manually if the file contexts cannot be created before the related files.
+</Note>
+
+### `selinux.port`
+
+Set the SELinux type for the specified protocol and port.
+
+```python
+selinux.port(
+    protocol,
+    port_num,
+    se_type=None,
+    present=True,
+)
+```
+
+<ParamField name="protocol" type="Protocol | str" required>
+  The protocol: (udp|tcp|sctp|dccp) or Protocol.TCP, Protocol.UDP, etc
+</ParamField>
+
+<ParamField name="port_num" type="int" required>
+  The port
+</ParamField>
+
+<ParamField name="se_type" type="str" default="None">
+  The SELinux type for the given port
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether to add or remove the SELinux type for the port
+</ParamField>
+
+<Note>
+This operation requires root privileges.
+</Note>
+
+## Examples
+
+```python
+from pyinfra.operations import selinux
+from pyinfra.operations.selinux import Boolean, Protocol
+
+# Allow Apache to connect to LDAP server
+selinux.boolean(
+    name="Allow Apache to connect to LDAP server",
+    bool_name="httpd_can_network_connect",
+    value=Boolean.ON,
+    persistent=True,
+)
+
+# Allow /foo/bar to be served by the web server
+selinux.file_context(
+    name="Allow /foo/bar to be served by the web server",
+    path="/foo/bar",
+    se_type="httpd_sys_content_t",
+)
+
+# Allow Apache to serve content from the /web directory
+selinux.file_context_mapping(
+    name="Allow Apache to serve content from the /web directory",
+    target=r"/web(/.*)?",
+    se_type="httpd_sys_content_t",
+)
+
+# Allow Apache to provide service on port 2222
+selinux.port(
+    name="Allow Apache to provide service on port 2222",
+    protocol=Protocol.TCP,
+    port_num=2222,
+    se_type="http_port_t",
+)
+```

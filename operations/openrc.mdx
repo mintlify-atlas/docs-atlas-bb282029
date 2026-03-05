@@ -1,0 +1,74 @@
+---
+title: openrc
+description: Manage OpenRC init services
+---
+
+Manage OpenRC init services.
+
+## Functions
+
+### `openrc.service`
+
+Manage the state of OpenRC services.
+
+```python
+openrc.service(
+    service,
+    running=True,
+    restarted=False,
+    reloaded=False,
+    command=None,
+    enabled=None,
+    runlevel="default",
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="running" type="bool" default="True">
+  Whether the service should be running
+</ParamField>
+
+<ParamField name="restarted" type="bool" default="False">
+  Whether the service should be restarted
+</ParamField>
+
+<ParamField name="reloaded" type="bool" default="False">
+  Whether the service should be reloaded
+</ParamField>
+
+<ParamField name="command" type="str" default="None">
+  Custom command to pass like: `rc-service <service> <command>`
+</ParamField>
+
+<ParamField name="enabled" type="bool" default="None">
+  Whether this service should be enabled/disabled on boot
+</ParamField>
+
+<ParamField name="runlevel" type="str" default="default">
+  Runlevel to manage services for
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import openrc
+
+# Manage an OpenRC service
+openrc.service(
+    name="Ensure nginx is running",
+    service="nginx",
+    running=True,
+    enabled=True,
+)
+
+# Enable a service for a specific runlevel
+openrc.service(
+    name="Enable sshd on boot runlevel",
+    service="sshd",
+    enabled=True,
+    runlevel="boot",
+)
+```

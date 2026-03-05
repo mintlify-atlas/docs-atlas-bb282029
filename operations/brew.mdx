@@ -1,0 +1,447 @@
+---
+title: brew Operations
+description: Manage Homebrew packages on macOS
+icon: apple
+---
+
+The `brew` module manages packages and casks on macOS using Homebrew package manager.
+
+## Functions
+
+### packages
+
+Install, remove, or update brew packages.
+
+```python
+from pyinfra.operations import brew
+
+brew.packages(
+    name="Install development tools",
+    packages=["vim", "git"],
+    update=True,
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<ParamField path="update" type="bool" default={false}>
+  Run `brew update` before installing packages.
+</ParamField>
+
+<ParamField path="upgrade" type="bool" default={false}>
+  Run `brew upgrade` before installing packages.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like brew: `<pkg>@<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import brew
+
+# Update package list and install packages
+brew.packages(
+    name="Install Vim and vimpager",
+    packages=["vimpager", "vim"],
+    update=True,
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import brew
+
+# Install the latest versions of packages (always check)
+brew.packages(
+    name="Install latest Vim",
+    packages=["vim"],
+    latest=True,
+)
+```
+
+```python Version Pinning
+from pyinfra.operations import brew
+
+# Install specific version
+brew.packages(
+    name="Install Python 3.9",
+    packages=["python@3.9"],
+)
+```
+</CodeGroup>
+
+---
+
+### update
+
+Update brew package repositories.
+
+```python
+from pyinfra.operations import brew
+
+brew.update(
+    name="Update brew repositories",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### upgrade
+
+Upgrade all brew packages.
+
+```python
+from pyinfra.operations import brew
+
+brew.upgrade(
+    name="Upgrade all packages",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### casks
+
+Install, remove, or update brew casks (applications).
+
+```python
+from pyinfra.operations import brew
+
+brew.casks(
+    name="Install desktop applications",
+    casks=["firefox", "visual-studio-code"],
+)
+```
+
+<ParamField path="casks" type="str | list[str]">
+  List of casks to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the casks should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade casks without a specified version.
+</ParamField>
+
+<ParamField path="upgrade" type="bool" default={false}>
+  Run `brew cask upgrade` before installing casks.
+</ParamField>
+
+<Note>
+  Cask versions can be pinned like brew: `<pkg>@<version>`
+</Note>
+
+#### Example
+
+```python
+from pyinfra.operations import brew
+
+brew.casks(
+    name="Upgrade and install the latest cask",
+    casks=["godot"],
+    upgrade=True,
+    latest=True,
+)
+```
+
+---
+
+### cask_upgrade
+
+Upgrade all brew casks.
+
+```python
+from pyinfra.operations import brew
+
+brew.cask_upgrade(
+    name="Upgrade all casks",
+)
+```
+
+<Warning>
+  This operation is **not idempotent** - it will always execute.
+</Warning>
+
+---
+
+### tap
+
+Add or remove brew taps (third-party repositories).
+
+```python
+from pyinfra.operations import brew
+
+brew.tap(
+    name="Add a brew tap",
+    src="homebrew/cask-fonts",
+)
+```
+
+<ParamField path="src" type="str">
+  The name of the tap (e.g., `user/repo`).
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether this tap should be present or not.
+</ParamField>
+
+<ParamField path="url" type="str">
+  The URL of the tap. See https://docs.brew.sh/Taps
+</ParamField>
+
+#### Examples
+
+<CodeGroup>
+```python Simple Tap
+from pyinfra.operations import brew
+
+brew.tap(
+    name="Add a brew tap",
+    src="includeos/includeos",
+)
+```
+
+```python Tap from URL
+from pyinfra.operations import brew
+
+# Just url is equivalent to:
+# brew tap kptdev/kpt https://github.com/kptdev/kpt
+brew.tap(
+    name="Add tap from URL",
+    url="https://github.com/kptdev/kpt",
+)
+```
+
+```python Custom URL
+from pyinfra.operations import brew
+
+# src and url is equivalent to:
+# brew tap example/project https://github.example.com/project
+brew.tap(
+    name="Add custom tap",
+    src="example/project",
+    url="https://github.example.com/project",
+)
+```
+
+```python Multiple Taps
+from pyinfra.operations import brew
+
+for tap in ["includeos/includeos", "ktr0731/evans"]:
+    brew.tap(
+        name=f"Add brew tap {tap}",
+        src=tap,
+    )
+```
+</CodeGroup>
+
+## Common Use Cases
+
+### Development Environment Setup
+
+```python
+from pyinfra.operations import brew
+
+# Update brew
+brew.update(
+    name="Update Homebrew",
+)
+
+# Install development tools
+brew.packages(
+    name="Install development tools",
+    packages=[
+        "git",
+        "vim",
+        "tmux",
+        "wget",
+        "curl",
+        "jq",
+        "python@3.11",
+        "node",
+    ],
+)
+
+# Install desktop applications
+brew.casks(
+    name="Install development applications",
+    casks=[
+        "visual-studio-code",
+        "iterm2",
+        "docker",
+        "postman",
+    ],
+)
+```
+
+### Install from Custom Tap
+
+```python
+from pyinfra.operations import brew
+
+# Add custom tap
+brew.tap(
+    name="Add custom tap",
+    src="homebrew/cask-fonts",
+)
+
+# Install from tap
+brew.casks(
+    name="Install fonts",
+    casks=[
+        "font-fira-code",
+        "font-jetbrains-mono",
+    ],
+)
+```
+
+### Full System Update
+
+```python
+from pyinfra.operations import brew
+
+# Update brew
+brew.update(
+    name="Update Homebrew",
+)
+
+# Upgrade all packages
+brew.upgrade(
+    name="Upgrade all packages",
+)
+
+# Upgrade all casks
+brew.cask_upgrade(
+    name="Upgrade all casks",
+)
+```
+
+### Database Tools
+
+```python
+from pyinfra.operations import brew
+
+brew.packages(
+    name="Install database tools",
+    packages=[
+        "postgresql@14",
+        "redis",
+        "mysql",
+    ],
+    update=True,
+)
+```
+
+### Install Browser for Testing
+
+```python
+from pyinfra.operations import brew
+
+brew.casks(
+    name="Install browsers",
+    casks=[
+        "google-chrome",
+        "firefox",
+        "microsoft-edge",
+    ],
+)
+```
+
+## Homebrew-Specific Tips
+
+<AccordionGroup>
+  <Accordion title="Services Management">
+    Homebrew provides service management for installed packages:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Start a service
+    server.shell(
+        name="Start PostgreSQL",
+        commands=["brew services start postgresql@14"],
+    )
+    
+    # Stop a service
+    server.shell(
+        name="Stop PostgreSQL",
+        commands=["brew services stop postgresql@14"],
+    )
+    
+    # Restart a service
+    server.shell(
+        name="Restart PostgreSQL",
+        commands=["brew services restart postgresql@14"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Cleanup Old Versions">
+    Remove old versions of installed packages:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Clean up old versions",
+        commands=["brew cleanup"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Check Installation Health">
+    Verify Homebrew installation:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Run brew doctor",
+        commands=["brew doctor"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Formula vs Cask">
+    - **Formulae** are command-line tools and libraries (use `brew.packages`)
+    - **Casks** are macOS applications (use `brew.casks`)
+    
+    ```python
+    from pyinfra.operations import brew
+    
+    # Command-line tool
+    brew.packages(
+        name="Install git",
+        packages=["git"],
+    )
+    
+    # Desktop application
+    brew.casks(
+        name="Install VS Code",
+        casks=["visual-studio-code"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>

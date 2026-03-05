@@ -1,0 +1,529 @@
+---
+title: Performance Tuning
+description: Optimize pyinfra deployments for speed and efficiency
+---
+
+As your infrastructure grows, optimizing pyinfra's performance becomes crucial. This guide covers techniques to speed up deployments, reduce resource usage, and scale to large numbers of hosts.
+
+## Understanding pyinfra Performance
+
+pyinfra's performance is affected by:
+- **Number of hosts**: Operations execute in parallel across hosts
+- **Number of operations**: Each operation involves fact gathering and command execution
+- **Network latency**: SSH connections and command execution time
+- **Fact gathering**: Frequent fact queries can slow deployments
+- **Operation complexity**: Complex operations with many conditionals
+
+## Parallel Execution
+
+pyinfra uses gevent for concurrent execution across hosts.
+
+### Controlling Parallelism
+
+Adjust the number of parallel operations:
+
+```bash
+# Default: 10 parallel hosts
+pyinfra inventory.py deploy.py
+
+# Increase to 50 parallel hosts
+pyinfra --parallel 50 inventory.py deploy.py
+
+# Reduce to 5 for resource-constrained systems
+pyinfra --parallel 5 inventory.py deploy.py
+```
+
+In Python API:
+
+```python
+from pyinfra import Config, State
+from pyinfra.api import Inventory
+
+config = Config(
+    PARALLEL=50,  # Execute on 50 hosts simultaneously
+)
+
+state = State(config=config, inventory=inventory)
+```
+
+### Optimal Parallel Settings
+
+Rules of thumb:
+- **Small clusters (< 10 hosts)**: Use default (10)
+- **Medium clusters (10-100 hosts)**: Set to 20-50
+- **Large clusters (> 100 hosts)**: Set to 50-100
+- **Very large clusters (> 1000 hosts)**: Consider batching (see below)
+
+## Fact Caching
+
+Facts are cached per deployment, but repeated queries in operations can still be slow.
+
+### Avoid Repeated Fact Queries
+
+Bad - queries fact multiple times:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation
+from pyinfra.facts.server import Hostname
+
+@operation()
+def bad_example():
+    # Queries hostname 3 times!
+    if host.get_fact(Hostname) == "web1":
+        yield f"echo {host.get_fact(Hostname)}"
+    yield f"hostname {host.get_fact(Hostname)}"
+```
+
+Good - queries fact once:
+
+```python
+@operation()
+def good_example():
+    # Query once, reuse result
+    hostname = host.get_fact(Hostname)
+    
+    if hostname == "web1":
+        yield f"echo {hostname}"
+    yield f"hostname {hostname}"
+```
+
+### Preload Facts
+
+For operations that always need certain facts, query them upfront:
+
+```python
+from pyinfra import host, State
+from pyinfra.api import operation
+from pyinfra.facts.files import Directory
+from pyinfra.facts.server import Hostname, Os
+
+# Preload facts for all hosts
+def preload_common_facts(state: State):
+    """Load commonly used facts upfront."""
+    from pyinfra.api.facts import get_facts
+    
+    # Load facts in parallel across all hosts
+    get_facts(
+        state,
+        Hostname,
+    )
+    get_facts(
+        state,
+        Os,
+    )
+
+# In deploy script
+preload_common_facts(state)
+
+# Now operations can use cached facts
+@operation()
+def optimized_operation():
+    hostname = host.get_fact(Hostname)  # Uses cache
+    os_name = host.get_fact(Os)          # Uses cache
+    # ...
+```
+
+## Batch Operations
+
+For very large deployments, batch hosts into groups:
+
+```python
+from pyinfra import State
+from pyinfra.api import Inventory
+
+inventory = Inventory.load_inventory("large_inventory.py")
+
+# Split into batches of 100 hosts
+batch_size = 100
+for i in range(0, len(inventory.hosts), batch_size):
+    batch_hosts = list(inventory.hosts.values())[i:i+batch_size]
+    
+    # Create inventory with just this batch
+    batch_inventory = Inventory(
+        (batch_hosts, {}),
+        override_data={}
+    )
+    
+    state = State(inventory=batch_inventory, config=config)
+    # Run operations on this batch
+    # ...
+```
+
+## Connection Reuse
+
+SSH connections are expensive. Reuse them where possible.
+
+### SSH ControlMaster
+
+Enable SSH connection multiplexing:
+
+```bash
+# In ~/.ssh/config
+Host *
+    ControlMaster auto
+    ControlPath ~/.ssh/control-%r@%h:%p
+    ControlPersist 10m
+```
+
+This reuses a single SSH connection for multiple commands, drastically reducing connection overhead.
+
+### Keep Connections Alive
+
+Set SSH keep-alive to prevent connection timeouts:
+
+```python
+from pyinfra import Config
+
+config = Config(
+    CONNECT_TIMEOUT=30,
+    # SSH keep-alive (sent every 60 seconds)
+    SSH_PARAMIKO_CONNECT_KWARGS={
+        'timeout': 30,
+        'banner_timeout': 30,
+    },
+)
+```
+
+## Optimize Operations
+
+### Minimize Commands
+
+Combine multiple commands into one:
+
+Bad - three separate commands:
+
+```python
+@operation()
+def bad_example():
+    yield "mkdir -p /opt/app"
+    yield "chown app:app /opt/app"
+    yield "chmod 755 /opt/app"
+```
+
+Good - one command:
+
+```python
+@operation()
+def good_example():
+    yield "mkdir -p /opt/app && chown app:app /opt/app && chmod 755 /opt/app"
+```
+
+### Use Idempotent Checks
+
+Skip operations that don't need to run:
+
+```python
+from pyinfra import host
+from pyinfra.api import operation
+from pyinfra.facts.files import Directory
+
+@operation()
+def ensure_directory(path: str, user: str, mode: str):
+    """Create directory only if it doesn't exist."""
+    dir_info = host.get_fact(Directory, path=path)
+    
+    if dir_info is None:
+        # Directory doesn't exist, create it
+        yield f"mkdir -p {path}"
+        yield f"chown {user}:{user} {path}"
+        yield f"chmod {mode} {path}"
+    elif dir_info["user"] != user or dir_info["mode"] != int(mode, 8):
+        # Directory exists but wrong permissions
+        yield f"chown {user}:{user} {path}"
+        yield f"chmod {mode} {path}"
+    else:
+        # Already correct, do nothing
+        host.noop(f"directory {path} already configured correctly")
+```
+
+## Reduce Logging Output
+
+Logging can slow down deployments with many operations.
+
+### Adjust Log Level
+
+```bash
+# Reduce verbosity
+pyinfra --quiet inventory.py deploy.py
+
+# Show only errors
+pyinfra --log-level ERROR inventory.py deploy.py
+```
+
+In code:
+
+```python
+from pyinfra import Config
+
+config = Config(
+    QUIET=True,           # Minimal output
+    LOG_LEVEL='WARNING',  # Only warnings and errors
+)
+```
+
+### Disable Fact Output
+
+```python
+config = Config(
+    PRINT_FACT_INFO=False,    # Don't print "Loaded fact..." messages
+    PRINT_FACT_INPUT=False,   # Don't print fact commands
+    PRINT_FACT_OUTPUT=False,  # Don't print fact output
+)
+```
+
+## File Transfer Optimization
+
+### Use rsync for Large Files
+
+pyinfra supports rsync for efficient file transfers:
+
+```python
+from pyinfra.operations import files
+
+files.rsync(
+    name="Sync large directory",
+    src="/local/large/dir/",
+    dest="/remote/large/dir/",
+    # Use compression for slow networks
+    flags=["-az"],
+)
+```
+
+### Compress Files Before Transfer
+
+```python
+from pyinfra.operations import files
+
+# Compress locally
+files.download(
+    name="Download compressed archive",
+    src="https://example.com/large-file.tar.gz",
+    dest="/tmp/large-file.tar.gz",
+)
+
+# Extract remotely
+server.shell(
+    name="Extract archive",
+    commands=["tar -xzf /tmp/large-file.tar.gz -C /opt/app"],
+)
+```
+
+## Memory Optimization
+
+For deployments with many hosts, memory usage can be significant.
+
+### Limit Stored Output
+
+By default, all command output is stored in memory:
+
+```python
+from pyinfra import Config
+
+config = Config(
+    # Don't store operation output
+    SAVE_OUTPUT=False,
+)
+```
+
+### Clean Up After Operations
+
+Delete temporary files during deployment:
+
+```python
+from pyinfra.operations import files, server
+
+# Upload and process
+files.put(
+    name="Upload large file",
+    src="large-file.dat",
+    dest="/tmp/large-file.dat",
+)
+
+server.shell(
+    name="Process file",
+    commands=["process /tmp/large-file.dat > /opt/output.dat"],
+)
+
+# Clean up immediately
+files.file(
+    name="Remove temporary file",
+    path="/tmp/large-file.dat",
+    present=False,
+)
+```
+
+## Profiling Deployments
+
+### Time Individual Operations
+
+Add timing to your deploy script:
+
+```python
+import time
+from pyinfra import logger
+
+def timed_operation(name: str, operation_func, *args, **kwargs):
+    """Execute operation and log execution time."""
+    start = time.time()
+    result = operation_func(*args, **kwargs)
+    elapsed = time.time() - start
+    logger.info(f"{name} took {elapsed:.2f}s")
+    return result
+
+# Use in deploy script
+timed_operation(
+    "Install packages",
+    apt.packages,
+    packages=["nginx", "postgresql"],
+    update=True,
+)
+```
+
+### Deployment Summary
+
+After deployment, review the summary:
+
+```bash
+pyinfra inventory.py deploy.py
+
+# Output includes timing:
+# --> Complete! Took 45.2s
+# --> Operations: 127 (45 changes, 82 no change)
+# --> Hosts: 10 (10 success, 0 failed)
+```
+
+## Caching Strategy
+
+### Cache Expensive Operations
+
+For operations that rarely change, cache their results:
+
+```python
+from functools import lru_cache
+from pyinfra import host
+from pyinfra.facts.server import Which
+
+@lru_cache(maxsize=None)
+def get_package_manager():
+    """Detect package manager (cached)."""
+    if host.get_fact(Which, command="apt-get"):
+        return "apt"
+    elif host.get_fact(Which, command="yum"):
+        return "yum"
+    elif host.get_fact(Which, command="pacman"):
+        return "pacman"
+    return None
+
+# First call queries facts
+pm = get_package_manager()  
+
+# Subsequent calls use cache
+pm = get_package_manager()  
+```
+
+## Network Optimization
+
+### Reduce Round Trips
+
+Minimize commands that require remote state checks:
+
+```python
+# Bad - checks state for each file
+for config_file in config_files:
+    files.template(
+        src=f"templates/{config_file}",
+        dest=f"/etc/app/{config_file}",
+    )
+
+# Good - upload all at once
+files.rsync(
+    src="templates/",
+    dest="/etc/app/",
+)
+```
+
+### Use Local Execution
+
+For operations that don't need remote execution:
+
+```python
+from pyinfra.operations import local
+
+# Run locally on controller
+local.shell(
+    name="Generate config locally",
+    commands=["./generate-config.sh"],
+)
+
+# Then upload
+files.put(
+    src="generated-config.yml",
+    dest="/etc/app/config.yml",
+)
+```
+
+## Database and Service Operations
+
+### Batch Database Operations
+
+```python
+from pyinfra.operations import postgresql
+
+# Bad - separate transaction for each
+for user in users:
+    postgresql.user(
+        user=user["name"],
+        password=user["password"],
+    )
+
+# Good - single SQL script
+sql_script = "\n".join([
+    f"CREATE USER {u['name']} WITH PASSWORD '{u['password']}';" 
+    for u in users
+])
+
+postgresql.sql(
+    name="Create all users",
+    sql=sql_script,
+)
+```
+
+## Best Practices Summary
+
+1. **Increase parallelism** for large deployments (--parallel flag)
+2. **Cache facts** by querying once and reusing results
+3. **Batch operations** for very large host counts
+4. **Enable SSH ControlMaster** for connection reuse
+5. **Combine commands** to reduce round trips
+6. **Use idempotent checks** to skip unnecessary work
+7. **Reduce logging** in production deployments
+8. **Use rsync** for large file transfers
+9. **Clean up temporary files** to save memory
+10. **Profile deployments** to identify bottlenecks
+
+## Benchmarking Example
+
+Compare before and after optimization:
+
+```python
+# Before optimization
+# Time: 180s for 50 hosts
+# Operations: 200
+
+# After optimization:
+# - Increased --parallel to 30
+# - Enabled SSH ControlMaster
+# - Cached common facts
+# - Combined 20 commands into 5
+# - Reduced logging
+
+# Time: 45s for 50 hosts (4x faster)
+# Operations: 180 (20 skipped as unnecessary)
+```
+
+## Next Steps
+
+- Learn about [Debugging](/advanced/debugging) when things go wrong
+- Explore [Writing Operations](/advanced/writing-operations) for efficient operation design
+- See [API Reference](/api-reference) for configuration options

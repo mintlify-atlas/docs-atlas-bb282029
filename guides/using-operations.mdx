@@ -1,0 +1,543 @@
+---
+title: Using Operations
+description: Complete guide to using pyinfra operations for infrastructure automation and state management
+---
+
+Operations are the core building blocks of pyinfra. They define the desired state of your infrastructure and pyinfra ensures that state is achieved. This guide covers everything you need to know about using operations effectively.
+
+## What Are Operations?
+
+Operations are Python functions that:
+- Define the desired state of a system (e.g., "package X should be installed")
+- Generate shell commands to achieve that state
+- Are **idempotent** - running them multiple times produces the same result
+- Can detect changes before applying them (dry-run mode)
+
+## Basic Operation Usage
+
+### Importing Operations
+
+Operations are organized by category in the `pyinfra.operations` module:
+
+```python
+from pyinfra.operations import (
+    apt,      # Debian/Ubuntu package management
+    yum,      # RedHat/CentOS package management
+    files,    # File and directory operations
+    server,   # System operations
+    git,      # Git operations
+    docker,   # Docker operations
+)
+```
+
+### Calling Operations
+
+Every operation call should include a descriptive `name` parameter:
+
+```python
+apt.packages(
+    name="Install web server packages",
+    packages=["nginx", "certbot"],
+    update=True,
+    _sudo=True,
+)
+```
+
+<Note>
+  The `name` parameter is required and helps you identify operations in pyinfra's output.
+</Note>
+
+## Common Operations
+
+### Package Management
+
+<CodeGroup>
+```python APT (Debian/Ubuntu)
+from pyinfra.operations import apt
+
+# Install packages
+apt.packages(
+    name="Install packages",
+    packages=["nginx", "postgresql", "redis-server"],
+    update=True,
+    _sudo=True,
+)
+
+# Remove packages
+apt.packages(
+    name="Remove old packages",
+    packages=["apache2"],
+    present=False,
+    _sudo=True,
+)
+
+# Upgrade all packages
+apt.upgrade(
+    name="Upgrade all packages",
+    _sudo=True,
+)
+```
+
+```python YUM/DNF (RHEL/CentOS)
+from pyinfra.operations import yum
+
+# Install packages
+yum.packages(
+    name="Install packages",
+    packages=["nginx", "postgresql-server"],
+    _sudo=True,
+)
+
+# Update all packages
+yum.update(
+    name="Update system",
+    _sudo=True,
+)
+```
+
+```python Multiple Package Managers
+from pyinfra import host
+from pyinfra.operations import apt, yum
+
+# Install based on OS
+if host.get_fact("LinuxDistribution") in ["Ubuntu", "Debian"]:
+    apt.packages(
+        name="Install vim",
+        packages=["vim"],
+        _sudo=True,
+    )
+elif host.get_fact("LinuxDistribution") in ["CentOS", "RedHat"]:
+    yum.packages(
+        name="Install vim",
+        packages=["vim"],
+        _sudo=True,
+    )
+```
+</CodeGroup>
+
+### File Operations
+
+<CodeGroup>
+```python Upload Files
+from pyinfra.operations import files
+
+# Upload a file
+files.put(
+    name="Upload application config",
+    src="config/app.conf",
+    dest="/etc/myapp/app.conf",
+    user="www-data",
+    group="www-data",
+    mode="644",
+    _sudo=True,
+)
+
+# Upload with templating
+files.template(
+    name="Upload nginx config from template",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/sites-available/myapp",
+    user="root",
+    mode="644",
+    _sudo=True,
+)
+```
+
+```python File Management
+from pyinfra.operations import files
+
+# Ensure file exists
+files.file(
+    name="Create empty log file",
+    path="/var/log/myapp/app.log",
+    user="www-data",
+    group="www-data",
+    mode="644",
+    _sudo=True,
+)
+
+# Remove file
+files.file(
+    name="Remove temporary file",
+    path="/tmp/old-file.txt",
+    present=False,
+    _sudo=True,
+)
+
+# Create symbolic link
+files.link(
+    name="Link nginx site",
+    path="/etc/nginx/sites-enabled/myapp",
+    target="/etc/nginx/sites-available/myapp",
+    _sudo=True,
+)
+```
+
+```python Directory Operations
+from pyinfra.operations import files
+
+# Create directory
+files.directory(
+    name="Create application directory",
+    path="/opt/myapp",
+    user="deploy",
+    group="deploy",
+    mode="755",
+    recursive=True,
+    _sudo=True,
+)
+
+# Download file from URL
+files.download(
+    name="Download application archive",
+    src="https://example.com/app-v1.0.tar.gz",
+    dest="/tmp/app.tar.gz",
+    _sudo=True,
+)
+```
+</CodeGroup>
+
+### System Operations
+
+<CodeGroup>
+```python Users and Groups
+from pyinfra.operations import server
+
+# Create user
+server.user(
+    name="Create application user",
+    user="appuser",
+    home="/home/appuser",
+    shell="/bin/bash",
+    system=True,
+    _sudo=True,
+)
+
+# Create group
+server.group(
+    name="Create application group",
+    group="appgroup",
+    _sudo=True,
+)
+```
+
+```python Service Management
+from pyinfra.operations import server
+
+# Start and enable service
+server.service(
+    name="Start nginx",
+    service="nginx",
+    running=True,
+    enabled=True,
+    _sudo=True,
+)
+
+# Restart service
+server.service(
+    name="Restart application",
+    service="myapp",
+    restarted=True,
+    _sudo=True,
+)
+
+# Stop service
+server.service(
+    name="Stop old service",
+    service="old-app",
+    running=False,
+    _sudo=True,
+)
+```
+
+```python Shell Commands
+from pyinfra.operations import server
+
+# Execute shell command
+server.shell(
+    name="Extract application archive",
+    commands=[
+        "cd /opt/myapp",
+        "tar -xzf /tmp/app.tar.gz",
+        "chown -R appuser:appuser .",
+    ],
+    _sudo=True,
+)
+
+# Run script
+server.script(
+    name="Run setup script",
+    src="scripts/setup.sh",
+    _sudo=True,
+)
+```
+</CodeGroup>
+
+### Git Operations
+
+```python
+from pyinfra.operations import git
+
+# Clone repository
+git.repo(
+    name="Clone application repository",
+    src="https://github.com/example/myapp.git",
+    dest="/opt/myapp",
+    branch="main",
+    pull=True,  # Pull latest changes if already cloned
+    user="deploy",
+    _sudo=True,
+)
+```
+
+## Global Arguments
+
+Global arguments (prefixed with `_`) control how operations are executed:
+
+### Common Global Arguments
+
+```python
+from pyinfra.operations import apt
+
+apt.packages(
+    name="Install packages",
+    packages=["nginx"],
+    
+    # Execute with sudo
+    _sudo=True,
+    
+    # Execute as specific user
+    _sudo_user="postgres",
+    
+    # Set environment variables
+    _env={"DATABASE_URL": "postgres://localhost/mydb"},
+    
+    # Set timeout (seconds)
+    _timeout=300,
+    
+    # Continue on error
+    _continue_on_error=True,
+    
+    # Only run if condition is true
+    _if=lambda: host.get_fact("LinuxDistribution") == "Ubuntu",
+)
+```
+
+<Note>
+  Global arguments are prefixed with underscore (`_`) to distinguish them from operation-specific parameters.
+</Note>
+
+## Operation Return Values
+
+Operations return metadata that you can use for conditional execution:
+
+```python
+from pyinfra.operations import files, server
+
+# Capture operation result
+config_changed = files.template(
+    name="Upload nginx config",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# Conditionally restart if config changed
+server.service(
+    name="Restart nginx if config changed",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+    _if=lambda: config_changed.did_change(),
+)
+```
+
+<Tip>
+  Use `did_change()` to check if an operation made changes, enabling smart service restarts and conditional operations.
+</Tip>
+
+## Working with Templates
+
+pyinfra uses Jinja2 for templating:
+
+<Steps>
+  <Step title="Create a template file">
+    Create `templates/nginx.conf.j2`:
+
+    ```jinja templates/nginx.conf.j2
+    server {
+        listen {{ port }};
+        server_name {{ server_name }};
+        
+        location / {
+            proxy_pass http://{{ backend_host }}:{{ backend_port }};
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Use template in deploy">
+    ```python deploy.py
+    from pyinfra import host
+    from pyinfra.operations import files
+
+    files.template(
+        name="Upload nginx config",
+        src="templates/nginx.conf.j2",
+        dest="/etc/nginx/sites-available/myapp",
+        port=host.data.get("nginx_port", 80),
+        server_name=host.data.get("server_name", "example.com"),
+        backend_host="localhost",
+        backend_port=8000,
+        _sudo=True,
+    )
+    ```
+  </Step>
+</Steps>
+
+## Combining Operations
+
+Build complex deployments by combining multiple operations:
+
+```python deploy.py
+from pyinfra.operations import apt, files, git, server
+
+# Install dependencies
+apt.packages(
+    name="Install system dependencies",
+    packages=["python3", "python3-pip", "git", "nginx"],
+    update=True,
+    _sudo=True,
+)
+
+# Create application user
+server.user(
+    name="Create app user",
+    user="myapp",
+    system=True,
+    home="/opt/myapp",
+    _sudo=True,
+)
+
+# Clone application
+git.repo(
+    name="Clone application",
+    src="https://github.com/example/myapp.git",
+    dest="/opt/myapp/code",
+    branch="main",
+    pull=True,
+    user="myapp",
+    _sudo=True,
+)
+
+# Install Python dependencies
+server.shell(
+    name="Install Python dependencies",
+    commands=[
+        "cd /opt/myapp/code",
+        "pip3 install -r requirements.txt",
+    ],
+    _sudo=True,
+    _sudo_user="myapp",
+)
+
+# Configure nginx
+files.template(
+    name="Configure nginx",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/sites-available/myapp",
+    _sudo=True,
+)
+
+files.link(
+    name="Enable nginx site",
+    path="/etc/nginx/sites-enabled/myapp",
+    target="/etc/nginx/sites-available/myapp",
+    _sudo=True,
+)
+
+# Restart services
+server.service(
+    name="Restart nginx",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+)
+```
+
+## Operation Categories
+
+pyinfra includes operations for many common tasks:
+
+| Category | Module | Purpose |
+|----------|--------|----------|
+| Package Management | `apt`, `yum`, `dnf`, `brew`, `apk` | Install/manage packages |
+| Files | `files` | File/directory operations, uploads, templates |
+| System | `server` | Users, groups, services, shell commands |
+| Version Control | `git` | Git repository management |
+| Containers | `docker` | Docker container/image management |
+| Databases | `mysql`, `postgresql` | Database operations |
+| Init Systems | `systemd`, `upstart`, `sysvinit` | Service management |
+| Web Servers | Operations use `files` for config | Configure nginx, apache |
+
+## Best Practices
+
+<Tip>
+  **Always name your operations** - Use descriptive names that explain what the operation does:
+  
+  ```python
+  # Good
+  apt.packages(
+      name="Install PostgreSQL database server",
+      packages=["postgresql"],
+  )
+  
+  # Bad
+  apt.packages(
+      name="Install pkg",
+      packages=["postgresql"],
+  )
+  ```
+</Tip>
+
+<Tip>
+  **Use idempotent operations** - Prefer state-defining operations over raw shell commands:
+  
+  ```python
+  # Good - idempotent
+  files.directory(
+      name="Create directory",
+      path="/opt/myapp",
+      _sudo=True,
+  )
+  
+  # Bad - will fail on second run
+  server.shell(
+      name="Create directory",
+      commands=["mkdir /opt/myapp"],
+      _sudo=True,
+  )
+  ```
+</Tip>
+
+<Tip>
+  **Check return values for conditional execution** - Use operation return values to create smart workflows:
+  
+  ```python
+  config_changed = files.template(name="Upload config", ...)
+  
+  server.service(
+      name="Restart only if config changed",
+      service="nginx",
+      restarted=True,
+      _if=lambda: config_changed.did_change(),
+  )
+  ```
+</Tip>
+
+## Next Steps
+
+- [Inventory and Data](/guides/inventory-and-data) - Pass configuration data to operations
+- [Deploying Applications](/guides/deploying-applications) - Build complete deployments
+- [Idempotent Operations](/guides/idempotent-operations) - Deep dive into state management
+- [Parallel Execution](/guides/parallel-execution) - Scale to many hosts

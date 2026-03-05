@@ -1,0 +1,536 @@
+---
+title: "Installation"
+description: "Install pyinfra using uv, pip, pipx, or from source"
+---
+
+This guide covers all the ways to install pyinfra and get your development environment ready.
+
+## System Requirements
+
+Before installing pyinfra, ensure your system meets these requirements:
+
+<AccordionGroup>
+  <Accordion title="Python Version">
+    pyinfra requires **Python 3.10 or higher**. Supported versions:
+    - Python 3.10
+    - Python 3.11
+    - Python 3.12
+    - Python 3.13
+    
+    Check your Python version:
+    ```bash
+    python --version
+    ```
+  </Accordion>
+  
+  <Accordion title="Operating System">
+    pyinfra works on:
+    - **Linux** (all major distributions)
+    - **macOS** (Intel and Apple Silicon)
+    - **Windows** (via WSL2 recommended)
+    
+    The tool itself is OS-independent, but targets POSIX-compatible systems (Linux/BSD/macOS).
+  </Accordion>
+  
+  <Accordion title="Dependencies">
+    pyinfra will automatically install these Python dependencies:
+    - `gevent>=1.5` - Concurrent execution engine
+    - `paramiko>=2.7,<4` - SSH connectivity
+    - `click>2` - CLI framework
+    - `jinja2>3,<4` - Template rendering
+    - `python-dateutil>2,<3` - Date handling
+    - `distro>=1.6,<2` - OS detection
+    - `packaging>=16.1` - Version parsing
+    - `pydantic>=2.11,<3` - Data validation
+  </Accordion>
+</AccordionGroup>
+
+## Installation Methods
+
+### Using uv (Recommended)
+
+[uv](https://docs.astral.sh/uv/) is the fastest Python package installer. Install pyinfra as a tool:
+
+<CodeGroup>
+```bash Install
+uv tool install pyinfra
+```
+
+```bash Verify
+pyinfra --version
+```
+</CodeGroup>
+
+<Tip>
+**Why uv?** It's significantly faster than pip, has better dependency resolution, and manages isolated tool environments automatically.
+</Tip>
+
+### Using pipx
+
+[pipx](https://pipx.pypa.io/) installs Python CLI tools in isolated environments:
+
+<CodeGroup>
+```bash Install pipx
+# On macOS
+brew install pipx
+pipx ensurepath
+
+# On Ubuntu/Debian
+sudo apt install pipx
+pipx ensurepath
+
+# On other systems
+python -m pip install --user pipx
+python -m pipx ensurepath
+```
+
+```bash Install pyinfra
+pipx install pyinfra
+```
+
+```bash Verify
+pyinfra --version
+```
+</CodeGroup>
+
+<Note>
+pipx is great if you want pyinfra available globally but isolated from other Python projects.
+</Note>
+
+### Using pip
+
+Install with pip for traditional Python package management:
+
+<CodeGroup>
+```bash Global Install
+pip install pyinfra
+```
+
+```bash User Install
+pip install --user pyinfra
+```
+
+```bash Virtual Environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install pyinfra
+```
+
+```bash Verify
+pyinfra --version
+```
+</CodeGroup>
+
+<Warning>
+Installing with pip globally can cause conflicts with system packages. Consider using a virtual environment or pipx instead.
+</Warning>
+
+### From Source
+
+Install the latest development version directly from GitHub:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/pyinfra-dev/pyinfra.git
+    cd pyinfra
+    ```
+  </Step>
+  
+  <Step title="Install with uv">
+    ```bash
+    # Install development dependencies
+    uv sync --all-extras
+    
+    # Install in editable mode
+    uv pip install -e .
+    ```
+  </Step>
+  
+  <Step title="Or install with pip">
+    ```bash
+    # Create and activate virtual environment
+    python -m venv venv
+    source venv/bin/activate
+    
+    # Install in editable mode
+    pip install -e .
+    ```
+  </Step>
+  
+  <Step title="Verify installation">
+    ```bash
+    pyinfra --version
+    ```
+  </Step>
+</Steps>
+
+<Accordion title="Why install from source?">
+- Access to unreleased features and bug fixes
+- Contributing to pyinfra development
+- Testing patches before official release
+- Custom modifications for your use case
+</Accordion>
+
+## Verifying Installation
+
+After installation, verify everything works correctly:
+
+<Steps>
+  <Step title="Check version">
+    ```bash
+    pyinfra --version
+    ```
+    
+    You should see output like:
+    ```
+    pyinfra 3.6.1
+    ```
+  </Step>
+  
+  <Step title="Test help command">
+    ```bash
+    pyinfra --help
+    ```
+    
+    This shows all available commands and options.
+  </Step>
+  
+  <Step title="Run a simple test">
+    Test local execution:
+    ```bash
+    pyinfra @local exec -- echo "pyinfra works!"
+    ```
+    
+    You should see:
+    ```
+    --> Loading inventory...
+    --> Connecting to hosts...
+        [@local] Connected
+    
+    --> Executing...
+        [@local] echo "pyinfra works!"
+        [@local] pyinfra works!
+    
+    --> Results:
+        Commands: 1
+        Success: 1
+    ```
+  </Step>
+</Steps>
+
+<Check>If all three steps work, pyinfra is installed correctly!</Check>
+
+## Additional Setup
+
+### SSH Configuration
+
+For SSH connectivity, ensure you have proper SSH setup:
+
+<CodeGroup>
+```bash Generate SSH Key
+ssh-keygen -t ed25519 -C "your-email@example.com"
+```
+
+```bash Copy Key to Server
+ssh-copy-id user@your-server.com
+```
+
+```bash Test Connection
+ssh user@your-server.com
+```
+</CodeGroup>
+
+<Tip>
+pyinfra respects your `~/.ssh/config` file. Configure connection settings there for easy access:
+
+```ssh-config ~/.ssh/config
+Host myserver
+    HostName 192.168.1.100
+    User admin
+    Port 2222
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+Then use: `pyinfra myserver deploy.py`
+</Tip>
+
+### Docker Setup (Optional)
+
+To use the Docker connector, install Docker:
+
+<CodeGroup>
+```bash macOS
+brew install --cask docker
+```
+
+```bash Ubuntu/Debian
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+```
+
+```bash Verify
+docker --version
+```
+</CodeGroup>
+
+Test the Docker connector:
+
+```bash
+pyinfra @docker/ubuntu exec -- echo "Hello from Docker!"
+```
+
+### Enabling Shell Completion
+
+pyinfra supports shell completion for bash, zsh, and fish:
+
+<CodeGroup>
+```bash Bash
+pyinfra --install-completion bash
+```
+
+```bash Zsh
+pyinfra --install-completion zsh
+```
+
+```bash Fish
+pyinfra --install-completion fish
+```
+</CodeGroup>
+
+Restart your shell or source the config file to enable completion.
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="'pyinfra' command not found">
+    **Problem**: The `pyinfra` command isn't in your PATH.
+    
+    **Solutions**:
+    1. If using pipx: Run `pipx ensurepath` and restart your shell
+    2. If using pip --user: Add `~/.local/bin` to your PATH:
+       ```bash
+       export PATH="$HOME/.local/bin:$PATH"
+       ```
+    3. If using virtual environment: Make sure it's activated:
+       ```bash
+       source venv/bin/activate
+       ```
+  </Accordion>
+  
+  <Accordion title="ImportError: No module named 'gevent'">
+    **Problem**: Dependencies weren't installed correctly.
+    
+    **Solution**: Reinstall with dependencies:
+    ```bash
+    pip install --force-reinstall pyinfra
+    ```
+  </Accordion>
+  
+  <Accordion title="Python version errors">
+    **Problem**: System Python is too old (< 3.10).
+    
+    **Solutions**:
+    1. Install a newer Python version:
+       ```bash
+       # macOS
+       brew install python@3.12
+       
+       # Ubuntu
+       sudo add-apt-repository ppa:deadsnakes/ppa
+       sudo apt update
+       sudo apt install python3.12
+       ```
+    
+    2. Use pyenv to manage Python versions:
+       ```bash
+       curl https://pyenv.run | bash
+       pyenv install 3.12
+       pyenv global 3.12
+       ```
+  </Accordion>
+  
+  <Accordion title="Permission denied errors">
+    **Problem**: Trying to install globally without sudo.
+    
+    **Solutions**:
+    1. Use pipx or uv (recommended)
+    2. Use pip with --user flag:
+       ```bash
+       pip install --user pyinfra
+       ```
+    3. Use a virtual environment
+  </Accordion>
+  
+  <Accordion title="SSL certificate errors">
+    **Problem**: Corporate proxy or firewall blocking PyPI.
+    
+    **Solutions**:
+    1. Configure pip to use your proxy:
+       ```bash
+       pip install --proxy=http://proxy.example.com:8080 pyinfra
+       ```
+    
+    2. Use your organization's PyPI mirror:
+       ```bash
+       pip install --index-url=https://pypi.example.com/simple pyinfra
+       ```
+  </Accordion>
+  
+  <Accordion title="Docker connector not working">
+    **Problem**: Can't connect to Docker daemon.
+    
+    **Solutions**:
+    1. Ensure Docker is running:
+       ```bash
+       docker ps
+       ```
+    
+    2. Add your user to the docker group:
+       ```bash
+       sudo usermod -aG docker $USER
+       newgrp docker
+       ```
+    
+    3. Check Docker socket permissions:
+       ```bash
+       ls -l /var/run/docker.sock
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Upgrading pyinfra
+
+Keep pyinfra up to date to get the latest features and bug fixes:
+
+<CodeGroup>
+```bash uv
+uv tool upgrade pyinfra
+```
+
+```bash pipx
+pipx upgrade pyinfra
+```
+
+```bash pip
+pip install --upgrade pyinfra
+```
+</CodeGroup>
+
+Check what's new in the [changelog](https://github.com/pyinfra-dev/pyinfra/blob/2.x/CHANGELOG.md).
+
+## Development Installation
+
+For contributing to pyinfra or developing custom operations:
+
+<Steps>
+  <Step title="Clone and setup">
+    ```bash
+    git clone https://github.com/pyinfra-dev/pyinfra.git
+    cd pyinfra
+    ```
+  </Step>
+  
+  <Step title="Install with dev dependencies">
+    ```bash
+    # Using uv (recommended)
+    uv sync --all-extras
+    
+    # Or using pip
+    pip install -e ".[dev]"
+    ```
+  </Step>
+  
+  <Step title="Install pre-commit hooks">
+    ```bash
+    pre-commit install
+    ```
+  </Step>
+  
+  <Step title="Run tests">
+    ```bash
+    # Run unit tests
+    pytest
+    
+    # Run with coverage
+    pytest --cov=pyinfra
+    
+    # Run linting
+    ruff check .
+    mypy src/pyinfra src/pyinfra_cli
+    ```
+  </Step>
+</Steps>
+
+<Note>
+Development dependencies include:
+- pytest and pytest-cov for testing
+- ruff for linting
+- mypy for type checking
+- ipython and ipdb for debugging
+</Note>
+
+## Uninstalling pyinfra
+
+If you need to remove pyinfra:
+
+<CodeGroup>
+```bash uv
+uv tool uninstall pyinfra
+```
+
+```bash pipx
+pipx uninstall pyinfra
+```
+
+```bash pip
+pip uninstall pyinfra
+```
+</CodeGroup>
+
+## Next Steps
+
+Now that pyinfra is installed:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Run your first deployment
+  </Card>
+  
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Understand how pyinfra works
+  </Card>
+  
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Master the command line interface
+  </Card>
+  
+  <Card title="Operations" icon="list" href="/operations/overview">
+    Explore available operations
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues not covered here:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/pyinfra-dev/pyinfra/issues">
+    Report bugs and installation problems
+  </Card>
+  
+  <Card title="GitHub Discussions" icon="comments" href="https://github.com/pyinfra-dev/pyinfra/discussions">
+    Ask questions and get community support
+  </Card>
+  
+  <Card title="Matrix Chat" icon="message" href="https://matrix.to/#/#pyinfra:matrix.org">
+    Real-time chat with the community
+  </Card>
+  
+  <Card title="Contributing Guide" icon="code" href="/development">
+    Learn how to contribute to pyinfra
+  </Card>
+</CardGroup>

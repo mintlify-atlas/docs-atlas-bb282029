@@ -1,0 +1,402 @@
+---
+title: Local Connector
+description: Execute operations on the local machine
+---
+
+The local connector executes operations on the local machine using subprocesses. This is useful for managing the machine you're running pyinfra from.
+
+## Overview
+
+The `@local` connector runs commands on your local machine instead of connecting to remote hosts via SSH.
+
+```shell
+# Execute on local machine
+pyinfra @local apt.packages nginx update=true _sudo=true
+
+# Run deploy file locally
+pyinfra @local deploy.py
+```
+
+<Note>
+The local connector is only compatible with macOS and Linux hosts. Windows is not supported.
+</Note>
+
+## Basic Usage
+
+### CLI Examples
+
+```shell
+# Install package locally
+pyinfra @local apt.packages curl _sudo=true
+
+# Run shell commands
+pyinfra @local server.shell "echo 'Hello from local'"
+
+# Execute deploy
+pyinfra @local deploy.py
+```
+
+### Inventory
+
+```python
+# inventory.py
+hosts = ["@local"]
+```
+
+<Warning>
+You can only have one `@local` host in your inventory. Multiple `@local` entries will raise an `InventoryError`.
+</Warning>
+
+## Example Deploy
+
+Here's a complete example managing the local machine:
+
+```python
+# inventory.py
+hosts = ["@local"]
+```
+
+```python
+# deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, files, systemd
+from pyinfra.facts.server import LinuxDistribution
+
+# Get local system info
+distro = host.get_fact(LinuxDistribution)
+print(f"Configuring local {distro['name']} {distro['version']} system")
+
+# Update system
+apt.update(
+    name="Update apt cache",
+    _sudo=True,
+)
+
+# Install development tools
+apt.packages(
+    name="Install dev tools",
+    packages=[
+        "build-essential",
+        "git",
+        "curl",
+        "vim",
+    ],
+    _sudo=True,
+)
+
+# Create project directory
+files.directory(
+    name="Create projects directory",
+    path="~/projects",
+    present=True,
+)
+
+# Configure git
+files.line(
+    name="Set git user.name",
+    path="~/.gitconfig",
+    line="[user]",
+    present=True,
+)
+
+files.line(
+    name="Set git user.email",
+    path="~/.gitconfig",
+    line="\temail = user@example.com",
+    present=True,
+)
+```
+
+```shell
+# Execute locally with sudo
+pyinfra @local deploy.py
+```
+
+## Use Cases
+
+### Local Development Setup
+
+Bootstrap a development environment:
+
+```python
+# setup_dev.py
+from pyinfra.operations import apt, pip, git, files
+
+# Install system packages
+apt.packages(
+    name="Install system dependencies",
+    packages=[
+        "python3",
+        "python3-pip",
+        "python3-venv",
+        "postgresql",
+        "redis-server",
+    ],
+    _sudo=True,
+)
+
+# Clone project
+git.repo(
+    name="Clone project repository",
+    src="https://github.com/user/project.git",
+    dest="~/projects/project",
+)
+
+# Create virtualenv
+pip.virtualenv(
+    name="Create Python virtualenv",
+    path="~/projects/project/venv",
+)
+
+# Install Python dependencies
+pip.packages(
+    name="Install Python packages",
+    packages=["requirements.txt"],
+    virtualenv="~/projects/project/venv",
+)
+```
+
+### CI/CD Pipelines
+
+Use in CI/CD to configure the build agent:
+
+```python
+# ci_setup.py
+from pyinfra.operations import apt, files
+
+# Install build tools
+apt.packages(
+    name="Install CI tools",
+    packages=[
+        "docker.io",
+        "ansible",
+        "terraform",
+    ],
+    _sudo=True,
+)
+
+# Create workspace
+files.directory(
+    name="Create CI workspace",
+    path="/workspace",
+    present=True,
+    _sudo=True,
+)
+```
+
+### Testing Operations
+
+Test operations locally before deploying remotely:
+
+```python
+# test_deploy.py
+from pyinfra.operations import server
+
+# Test command locally
+server.shell(
+    name="Test command",
+    commands=["ls -la /tmp"],
+)
+```
+
+```shell
+# Test locally first
+pyinfra @local test_deploy.py
+
+# Then deploy to production
+pyinfra inventory.py test_deploy.py
+```
+
+## Combining Local and Remote Hosts
+
+You can mix local and remote hosts in the same inventory:
+
+```python
+# inventory.py
+hosts = [
+    "@local",
+    "web1.example.com",
+    "web2.example.com",
+]
+```
+
+Use host data to differentiate:
+
+```python
+# deploy.py
+from pyinfra import host
+from pyinfra.operations import files
+
+if host.name == "@local":
+    # Local-specific operations
+    files.directory(
+        name="Create local logs directory",
+        path="~/logs",
+    )
+else:
+    # Remote-specific operations
+    files.directory(
+        name="Create remote logs directory",
+        path="/var/log/app",
+        _sudo=True,
+    )
+```
+
+## Privilege Escalation
+
+Use sudo for operations requiring elevated privileges:
+
+```python
+# Install system package
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,  # Uses sudo
+)
+
+# Create file in home directory (no sudo needed)
+files.file(
+    name="Create user file",
+    path="~/test.txt",
+    content="Hello",
+)
+```
+
+## API Usage
+
+Use the local connector in API mode:
+
+```python
+from pyinfra import Config, Inventory, State
+from pyinfra.api import add_op
+from pyinfra.operations import server
+
+# Create inventory with local host
+inventory = Inventory(
+    (["@local"], {})
+)
+
+config = Config(SUDO=True)
+state = State(inventory, config)
+state.init(inventory, config)
+
+# Connect
+for host in inventory:
+    host.connect()
+
+# Add operations
+add_op(
+    state,
+    server.shell,
+    commands=["uname -a"],
+)
+
+# Execute
+from pyinfra.api.operations import run_ops
+run_ops(state)
+```
+
+## Command Execution
+
+The local connector uses subprocess to execute commands:
+
+```python
+# This command
+server.shell(commands=["ls /tmp"])
+
+# Becomes
+import subprocess
+subprocess.run(["sh", "-c", "ls /tmp"])
+
+# With sudo
+server.shell(commands=["ls /tmp"], _sudo=True)
+
+# Becomes
+subprocess.run(["sudo", "-H", "-n", "sh", "-c", "ls /tmp"])
+```
+
+## Environment Variables
+
+Pass environment variables to local commands:
+
+```python
+from pyinfra import Config
+from pyinfra.operations import server
+
+config = Config(
+    ENV={
+        "PATH": "/custom/bin:$PATH",
+        "MY_VAR": "value",
+    }
+)
+
+server.shell(
+    name="Command with env",
+    commands=["echo $MY_VAR"],
+)
+```
+
+## Timeout
+
+Set command timeouts:
+
+```python
+from pyinfra.operations import server
+
+server.shell(
+    name="Long running command",
+    commands=["./long_script.sh"],
+    _timeout=300,  # 5 minute timeout
+)
+```
+
+## Limitations
+
+<Warning>
+The local connector has some limitations:
+
+- Only one `@local` host per inventory
+- Not compatible with Windows
+- No connection pooling (each command is a new subprocess)
+- File operations copy files unnecessarily (source and dest are same filesystem)
+</Warning>
+
+## Security Considerations
+
+<Warning>
+When using `@local`, be careful with:
+
+- File permissions (operations run as current user)
+- Sudo access (may require password prompts)
+- Destructive operations (directly affect your machine)
+- User input (risk of command injection)
+
+Always test with `--dry` flag first:
+```shell
+pyinfra @local deploy.py --dry
+```
+</Warning>
+
+## Comparison with Other Connectors
+
+| Feature | @local | @ssh | @docker |
+|---------|---------|------|----------|
+| Remote execution | No | Yes | Yes |
+| Requires SSH | No | Yes | No |
+| Requires Docker | No | No | Yes |
+| Platform support | Linux/macOS | Any | Linux |
+| Use case | Local management | Remote servers | Testing/containers |
+
+## Source Reference
+
+Location: `src/pyinfra/connectors/local.py:26`
+
+### Key Properties
+
+- `handles_execution` - This connector handles command execution directly
+
+### Key Methods
+
+- `run_shell_command()` - Execute command locally (line 50)
+- `put_file()` - Copy file locally (line 107)
+- `get_file()` - Copy file locally (line 132)

@@ -1,122 +1,212 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "pyinfra",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0aaf51",
+    "light": "#ade6c5",
+    "dark": "#23342b"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/70997c3b-5172-494d-8758-828b53b1c85f.png",
+  "logo": {
+    "light": "https://media.brand.dev/70997c3b-5172-494d-8758-828b53b1c85f.png",
+    "dark": "https://media.brand.dev/70997c3b-5172-494d-8758-828b53b1c85f.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/pyinfra-dev/pyinfra"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/pyinfra-dev/pyinfra"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/operations",
+              "concepts/facts",
+              "concepts/inventory",
+              "concepts/state",
+              "concepts/connectors"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/getting-started-tutorial",
+              "guides/using-operations",
+              "guides/inventory-and-data",
+              "guides/deploying-applications",
+              "guides/idempotent-operations",
+              "guides/parallel-execution"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "CLI Reference",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "cli/overview",
+              "cli/commands",
+              "cli/arguments"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/writing-operations",
+              "advanced/writing-facts",
+              "advanced/writing-connectors",
+              "advanced/performance-tuning",
+              "advanced/debugging"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Operations",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "operations/overview"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Package Managers",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "operations/apt",
+              "operations/yum",
+              "operations/dnf",
+              "operations/apk",
+              "operations/pacman",
+              "operations/brew",
+              "operations/choco",
+              "operations/pkg",
+              "operations/zypper"
+            ]
+          },
+          {
+            "group": "Language Packages",
+            "pages": [
+              "operations/pip",
+              "operations/pipx",
+              "operations/npm",
+              "operations/gem",
+              "operations/cargo"
+            ]
+          },
+          {
+            "group": "Service Management",
+            "pages": [
+              "operations/systemd",
+              "operations/sysvinit",
+              "operations/upstart",
+              "operations/launchd",
+              "operations/openrc",
+              "operations/runit"
+            ]
+          },
+          {
+            "group": "System Operations",
+            "pages": [
+              "operations/server",
+              "operations/files",
+              "operations/crontab",
+              "operations/ssh"
+            ]
+          },
+          {
+            "group": "Containers",
+            "pages": [
+              "operations/docker",
+              "operations/lxd"
+            ]
+          },
+          {
+            "group": "Databases",
+            "pages": [
+              "operations/mysql",
+              "operations/postgres"
+            ]
+          },
+          {
+            "group": "Version Control",
+            "pages": [
+              "operations/git"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "operations/iptables",
+              "operations/selinux"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview"
+            ]
+          },
+          {
+            "group": "Core API",
+            "pages": [
+              "api/deploy",
+              "api/operation",
+              "api/host",
+              "api/inventory",
+              "api/state",
+              "api/config"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "api/commands"
+            ]
+          },
+          {
+            "group": "Connectors",
+            "pages": [
+              "api/connectors/ssh",
+              "api/connectors/docker",
+              "api/connectors/local",
+              "api/connectors/terraform",
+              "api/connectors/vagrant"
+            ]
+          },
+          {
+            "group": "Facts",
+            "pages": [
+              "api/facts/overview",
+              "api/facts/server",
+              "api/facts/files",
+              "api/facts/packages"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

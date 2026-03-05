@@ -1,0 +1,727 @@
+---
+title: "Inventory"
+description: "Managing target hosts, groups, and data in pyinfra"
+---
+
+## Overview
+
+The Inventory is pyinfra's system for managing target hosts, organizing them into groups, and associating configuration data. It's the foundation of multi-host deployments and enables flexible, data-driven infrastructure automation.
+
+<Note>
+The Inventory class (defined in `src/pyinfra/api/inventory.py`) represents a collection of hosts with their associated data and group memberships.
+</Note>
+
+## Inventory Structure
+
+The Inventory consists of three key components:
+
+1. **Hosts**: Individual target machines
+2. **Groups**: Collections of hosts sharing properties
+3. **Data**: Configuration values associated with hosts and groups
+
+```python
+# From src/pyinfra/api/inventory.py:25-58
+class Inventory:
+    """
+    Represents a collection of target hosts. Stores and provides access to group data,
+    host data and default data for these hosts.
+
+    Args:
+        names_data: tuple of (names, data)
+        override_data: dictionary of data overrides
+        **groups: map of group name -> (names, data)
+    """
+
+    state: State
+    groups: dict[str, list[Host]]
+    hosts: dict[str, Host]
+    host_data: dict[str, dict]
+    group_data: dict[str, dict]
+    data: dict  # Global/default data
+    override_data: dict  # Override data
+```
+
+## Creating Inventories
+
+### Simple Inventory
+
+Create an inventory with a list of hostnames:
+
+```python
+from pyinfra.api import Inventory
+
+# List of hosts
+hosts = ["web1.example.com", "web2.example.com", "db1.example.com"]
+
+# Create inventory
+inventory = Inventory(
+    (hosts, {}),  # (names, data)
+)
+```
+
+### Inventory with Host Data
+
+Associate data with specific hosts:
+
+```python
+from pyinfra.api import Inventory
+
+# Hosts with individual data
+hosts = [
+    ("web1.example.com", {"app_port": 8001}),
+    ("web2.example.com", {"app_port": 8002}),
+    "db1.example.com",  # No individual data
+]
+
+inventory = Inventory(
+    (hosts, {}),
+)
+```
+
+### Inventory with Groups
+
+Organize hosts into groups:
+
+```python
+from pyinfra.api import Inventory
+
+inventory = Inventory(
+    (["web1.example.com", "web2.example.com", "db1.example.com"], {}),
+    webservers=(
+        ["web1.example.com", "web2.example.com"],
+        {"app_env": "production"},
+    ),
+    databases=(
+        ["db1.example.com"],
+        {"db_type": "postgresql"},
+    ),
+)
+```
+
+### Inventory with Global Data
+
+Set default values for all hosts:
+
+```python
+from pyinfra.api import Inventory
+
+inventory = Inventory(
+    (
+        ["web1.example.com", "web2.example.com"],
+        {"ssh_user": "deploy", "ssh_port": 22},  # Global data
+    ),
+)
+```
+
+## Host Creation
+
+When the inventory is created, it generates Host objects:
+
+```python
+# From src/pyinfra/api/inventory.py:60-146
+def make_hosts_and_groups(self, names, groups) -> None:
+    all_connectors = get_all_connectors()
+    execution_connectors = get_execution_connectors()
+
+    # Map name -> data
+    name_to_data: dict[str, dict] = defaultdict(dict)
+    # Map name -> group names
+    name_to_group_names = defaultdict(list)
+
+    # Process groups first
+    for group_name, (group_names, group_data) in groups.items():
+        self.group_data[group_name] = group_data
+
+        for name, data in extract_name_data(group_names):
+            name_to_data[name].update(data)
+            name_to_group_names[name].append(group_name)
+
+    # Process top-level hosts
+    for name, data in extract_name_data(names):
+        name_to_data[name].update(data)
+
+    # Create Host instances
+    hosts: dict[str, Host] = {}
+
+    for name, connector_cls in names_connectors:
+        host_groups = name_to_group_names[name]
+
+        host = Host(
+            name,
+            inventory=self,
+            groups=host_groups,
+            connector_cls=connector_cls,
+        )
+        hosts[name] = host
+
+        # Add to groups
+        for group_name in host_groups:
+            if host not in self.groups[group_name]:
+                self.groups[group_name].append(host)
+
+    self.hosts = hosts
+```
+
+## Host Object
+
+Each host in the inventory is represented by a Host object (from `src/pyinfra/api/host.py`):
+
+```python
+# From src/pyinfra/api/host.py:103-178
+class Host:
+    """
+    Represents a target host. Thin class that links up to facts and host/group data.
+    """
+
+    state: State
+    connector_cls: type[BaseConnector]
+    connector: BaseConnector
+    connected: bool = False
+
+    name: str
+    inventory: Inventory
+    groups: list[str]
+    data: HostData  # Waterfall data access
+
+    def __init__(
+        self,
+        name: str,
+        inventory: Inventory,
+        groups: list[str],
+        connector_cls=None,
+    ):
+        self.inventory = inventory
+        self.groups = groups
+        self.connector_cls = connector_cls or get_execution_connector("ssh")
+        self.name = name
+
+        # Create waterfall data: override -> host -> group -> global -> deploy
+        self.data = HostData(
+            self,
+            lambda: inventory.get_override_data(),
+            lambda: inventory.get_host_data(name),
+            lambda: inventory.get_groups_data(groups),
+            lambda: inventory.get_data(),
+            self.get_deploy_data,  # @deploy function data
+        )
+```
+
+## Data Hierarchy
+
+pyinfra uses a waterfall data system where more specific data overrides more general data:
+
+```
+Override Data (highest priority)
+    ↓
+Host Data
+    ↓
+Group Data
+    ↓
+Global Data
+    ↓
+Deploy Data (lowest priority)
+```
+
+### Accessing Host Data
+
+```python
+from pyinfra import host
+
+# Access data attributes
+app_port = host.data.app_port
+ssh_user = host.data.ssh_user
+
+# With defaults
+app_port = host.data.get("app_port", 8000)
+
+# Check if data exists
+if hasattr(host.data, "app_port"):
+    print(f"App port: {host.data.app_port}")
+```
+
+### Data Example
+
+```python
+from pyinfra.api import Inventory
+
+inventory = Inventory(
+    # Global data (applies to all hosts)
+    (
+        [
+            ("web1.example.com", {"app_port": 8001}),  # Host data
+            ("web2.example.com", {"app_port": 8002}),
+            "db1.example.com",
+        ],
+        {"ssh_user": "deploy", "ssh_port": 22},  # Global data
+    ),
+    # Group data
+    webservers=(
+        ["web1.example.com", "web2.example.com"],
+        {"app_env": "production", "app_workers": 4},  # Group data
+    ),
+)
+
+# For web1.example.com:
+# - host.data.app_port = 8001 (host data)
+# - host.data.app_env = "production" (group data)
+# - host.data.ssh_user = "deploy" (global data)
+```
+
+## Inventory Methods
+
+### Getting Hosts
+
+```python
+from pyinfra.api import Inventory
+
+inventory = Inventory(
+    (["web1", "web2", "db1"], {}),
+    webservers=(["web1", "web2"], {}),
+)
+
+# Get specific host
+web1 = inventory.get_host("web1")
+
+# Get all hosts
+for host in inventory:
+    print(host.name)
+
+# Get host count
+print(f"Total hosts: {len(inventory)}")
+```
+
+### Getting Groups
+
+```python
+# Get hosts in a group
+webservers = inventory.get_group("webservers")
+for host in webservers:
+    print(f"Webserver: {host.name}")
+
+# Check if group exists
+if "databases" in inventory.groups:
+    db_hosts = inventory.get_group("databases")
+```
+
+### Getting Data
+
+```python
+# Get global data
+global_data = inventory.get_data()
+
+# Get host data
+host_data = inventory.get_host_data("web1")
+
+# Get group data
+group_data = inventory.get_group_data("webservers")
+
+# Get combined group data
+groups_data = inventory.get_groups_data(["webservers", "production"])
+```
+
+## Inventory Connectors
+
+pyinfra supports connector-based inventory sources:
+
+### SSH Connector (Default)
+
+```python
+# Explicit SSH hosts
+hosts = [
+    "@ssh/web1.example.com",
+    "@ssh/web2.example.com",
+]
+
+inventory = Inventory((hosts, {}))
+```
+
+### Local Connector
+
+```python
+# Execute on local machine
+hosts = ["@local"]
+
+inventory = Inventory((hosts, {}))
+```
+
+### Docker Connector
+
+```python
+# Target Docker containers
+hosts = [
+    "@docker/web_container",
+    "@docker/db_container",
+]
+
+inventory = Inventory((hosts, {}))
+```
+
+### Dynamic Connectors
+
+Connectors can generate multiple hosts:
+
+```python
+# From src/pyinfra/api/inventory.py:92-113
+if name[0] == "@":
+    connector_name = name[1:]
+    arg_string = None
+
+    if "/" in connector_name:
+        connector_name, arg_string = connector_name.split("/", 1)
+
+    if connector_name not in get_all_connectors():
+        raise NoConnectorError(f"Invalid connector: {connector_name}")
+
+    # Connector can expand to multiple hosts
+    names_data = all_connectors[connector_name].make_names_data(arg_string)
+    
+    # Each connector-generated host gets its own Host instance
+    for sub_name, sub_data, sub_groups in names_data:
+        # Create host with connector data
+        ...
+```
+
+Example: Terraform connector generates hosts from Terraform state:
+
+```python
+hosts = ["@terraform"]
+inventory = Inventory((hosts, {}))
+# Automatically discovers hosts from terraform.tfstate
+```
+
+## CLI Inventory
+
+When using pyinfra from the command line, inventory is specified differently:
+
+### Inventory File
+
+```python
+# inventory.py
+hosts = ["web1.example.com", "web2.example.com"]
+
+webservers = ["web1.example.com", "web2.example.com"]
+databases = ["db1.example.com"]
+```
+
+Usage:
+
+```bash
+pyinfra inventory.py deploy.py
+```
+
+### Inline Hosts
+
+```bash
+# Single host
+pyinfra web1.example.com deploy.py
+
+# Multiple hosts
+pyinfra web1.example.com,web2.example.com deploy.py
+
+# With connector
+pyinfra @docker/my_container deploy.py
+```
+
+### Inventory + Data Files
+
+```python
+# inventory.py
+hosts = ["web1", "web2", "db1"]
+
+webservers = ["web1", "web2"]
+```
+
+```python
+# group_data/webservers.py
+app_env = "production"
+app_workers = 4
+```
+
+```python
+# host_data/web1.py
+app_port = 8001
+```
+
+## Limiting Hosts
+
+Run operations on a subset of inventory:
+
+```bash
+# Limit to specific hosts
+pyinfra inventory.py deploy.py --limit web1.example.com
+
+# Limit to a group
+pyinfra inventory.py deploy.py --limit webservers
+
+# Multiple limits
+pyinfra inventory.py deploy.py --limit web1,web2
+```
+
+In code:
+
+```python
+from pyinfra.api import State, Inventory
+
+inventory = Inventory((["web1", "web2", "db1"], {}))
+state = State()
+state.init(inventory, config)
+
+# Limit to specific hosts
+web1 = inventory.get_host("web1")
+state.limit_hosts = [web1]
+
+# Operations will only run on web1
+```
+
+## Active vs Activated Hosts
+
+```python
+# From src/pyinfra/api/state.py:254-280
+class State:
+    # Hosts we've activated at any time
+    activated_hosts: set[Host]
+    
+    # Active hosts that *haven't* failed yet
+    active_hosts: set[Host]
+    
+    # Hosts that have failed
+    failed_hosts: set[Host]
+
+# Get active hosts (not failed)
+active = inventory.get_active_hosts()
+
+# Get all activated hosts (including failed)
+activated = list(inventory.iter_activated_hosts())
+```
+
+## Inventory Patterns
+
+### Environment-Based Inventory
+
+```python
+# inventory/production.py
+hosts = [
+    ("web1.prod.example.com", {"env": "production"}),
+    ("web2.prod.example.com", {"env": "production"}),
+]
+
+# inventory/staging.py  
+hosts = [
+    ("web1.staging.example.com", {"env": "staging"}),
+]
+```
+
+```bash
+pyinfra inventory/production.py deploy.py
+pyinfra inventory/staging.py deploy.py
+```
+
+### Role-Based Groups
+
+```python
+inventory = Inventory(
+    (["host1", "host2", "host3", "host4"], {}),
+    webservers=(["host1", "host2"], {}),
+    appservers=(["host2", "host3"], {}),  # host2 in multiple groups
+    databases=(["host4"], {}),
+)
+```
+
+### Dynamic Inventory
+
+```python
+import boto3
+from pyinfra.api import Inventory
+
+# Fetch EC2 instances
+ec2 = boto3.client('ec2')
+response = ec2.describe_instances(Filters=[{'Name': 'tag:App', 'Values': ['web']}])
+
+hosts = []
+for reservation in response['Reservations']:
+    for instance in reservation['Instances']:
+        hosts.append((
+            instance['PublicDnsName'],
+            {
+                'instance_id': instance['InstanceId'],
+                'instance_type': instance['InstanceType'],
+            },
+        ))
+
+inventory = Inventory((hosts, {'ssh_user': 'ec2-user'}))
+```
+
+### Conditional Deployment
+
+```python
+from pyinfra import host
+from pyinfra.operations import apt
+
+# Only run on hosts in production group
+if "production" in host.groups:
+    apt.packages(
+        name="Install production packages",
+        packages=["nginx", "postgresql"],
+    )
+
+# Only run on specific hosts
+if host.name == "web1.example.com":
+    apt.packages(
+        name="Install monitoring agent",
+        packages=["datadog-agent"],
+    )
+```
+
+## Host Data Patterns
+
+### Port Mapping
+
+```python
+inventory = Inventory(
+    (
+        [
+            ("web1", {"app_port": 8001}),
+            ("web2", {"app_port": 8002}),
+            ("web3", {"app_port": 8003}),
+        ],
+        {},
+    ),
+)
+
+# In deploy
+from pyinfra import host
+from pyinfra.operations import server
+
+server.shell(
+    name="Start application",
+    commands=[f"./start.sh --port {host.data.app_port}"],
+)
+```
+
+### Connection Configuration
+
+```python
+inventory = Inventory(
+    (
+        [
+            ("bastion", {"ssh_port": 22, "ssh_user": "admin"}),
+            ("internal1", {"ssh_port": 2222, "ssh_user": "deploy"}),
+        ],
+        {"ssh_key": "~/.ssh/id_rsa"},  # Global default
+    ),
+)
+```
+
+### Application Configuration
+
+```python
+inventory = Inventory(
+    (["web1", "web2"], {}),
+    webservers=(
+        ["web1", "web2"],
+        {
+            "app_env": "production",
+            "app_workers": 4,
+            "app_threads": 2,
+            "app_timeout": 30,
+            "db_host": "db.internal",
+            "db_port": 5432,
+        },
+    ),
+)
+
+# Access in deploy
+from pyinfra import host
+
+db_url = f"postgresql://{host.data.db_host}:{host.data.db_port}/app"
+```
+
+## Override Data
+
+Override inventory data from the command line:
+
+```bash
+pyinfra inventory.py deploy.py --data ssh_user=root --data app_port=9000
+```
+
+In code:
+
+```python
+inventory = Inventory(
+    (["web1", "web2"], {}),
+    override_data={"ssh_user": "root", "app_port": 9000},
+)
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Organize by Role" icon="users">
+    Group hosts by their function (webservers, databases, etc.) for targeted deployments.
+  </Card>
+  
+  <Card title="Use Data Hierarchy" icon="layer-group">
+    Place common config in global data, role-specific in groups, and unique values in host data.
+  </Card>
+  
+  <Card title="Environment Separation" icon="code-branch">
+    Use separate inventory files for production, staging, and development environments.
+  </Card>
+  
+  <Card title="Descriptive Names" icon="tag">
+    Use clear, consistent naming for hosts and groups (e.g., `web1.prod` not `server23`).
+  </Card>
+  
+  <Card title="Document Data Keys" icon="book">
+    Document expected data keys and their purposes for your deployments.
+  </Card>
+  
+  <Card title="Version Control" icon="code-commit">
+    Keep inventory files in version control to track infrastructure changes.
+  </Card>
+</CardGroup>
+
+## Testing Inventory
+
+```python
+import pytest
+from pyinfra.api import Inventory
+
+def test_inventory_structure():
+    inventory = Inventory(
+        (["web1", "web2", "db1"], {"ssh_user": "deploy"}),
+        webservers=(["web1", "web2"], {"app_env": "prod"}),
+    )
+    
+    # Test host count
+    assert len(inventory) == 3
+    
+    # Test group membership
+    webservers = inventory.get_group("webservers")
+    assert len(webservers) == 2
+    
+    # Test data hierarchy
+    web1 = inventory.get_host("web1")
+    assert web1.data.ssh_user == "deploy"  # Global data
+    assert web1.data.app_env == "prod"  # Group data
+```
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Host" icon="server" href="/api/host">
+    Learn about the Host class and host-specific operations
+  </Card>
+  
+  <Card title="Connectors" icon="plug" href="/concepts/connectors">
+    Understand how connectors enable different inventory sources
+  </Card>
+  
+  <Card title="State" icon="circle-nodes" href="/concepts/state">
+    See how State manages active and failed hosts
+  </Card>
+  
+  <Card title="CLI Usage" icon="terminal" href="/cli/overview">
+    Learn command-line inventory options
+  </Card>
+</CardGroup>

@@ -1,0 +1,359 @@
+---
+title: gem Operations
+description: Manage Ruby gems
+icon: gem
+---
+
+The `gem` module manages Ruby gem packages.
+
+<Note>
+  This module assumes that `gem` (RubyGems) is already installed on the system.
+</Note>
+
+## Functions
+
+### packages
+
+Install, remove, or update gem packages.
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Ruby gems",
+    packages=["rails", "bundler"],
+)
+```
+
+<ParamField path="packages" type="str | list[str]">
+  List of packages to ensure.
+</ParamField>
+
+<ParamField path="present" type="bool" default={true}>
+  Whether the packages should be installed.
+</ParamField>
+
+<ParamField path="latest" type="bool" default={false}>
+  Whether to upgrade packages without a specified version.
+</ParamField>
+
+<Note>
+  Package versions can be pinned like gem: `<pkg>:<version>`
+</Note>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Installation
+from pyinfra.operations import gem
+
+# Note: Assumes that 'gem' is installed.
+gem.packages(
+    name="Install rspec",
+    packages=["rspec"],
+)
+```
+
+```python Multiple Packages
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Rails and dependencies",
+    packages=[
+        "rails",
+        "bundler",
+        "puma",
+        "pg",
+    ],
+)
+```
+
+```python Version Pinning
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install specific gem versions",
+    packages=[
+        "rails:7.0.4",
+        "bundler:2.4.10",
+    ],
+)
+```
+
+```python Latest Versions
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install latest gems",
+    packages=["rails", "rspec"],
+    latest=True,
+)
+```
+</CodeGroup>
+
+## Common Use Cases
+
+### Rails Application Setup
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Rails stack",
+    packages=[
+        "rails",
+        "bundler",
+        "puma",
+        "pg",
+        "redis",
+    ],
+)
+```
+
+### Development Tools
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Ruby development tools",
+    packages=[
+        "rubocop",
+        "rspec",
+        "pry",
+        "bundler-audit",
+    ],
+)
+```
+
+### Static Site Generator
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Jekyll",
+    packages=[
+        "jekyll",
+        "bundler",
+    ],
+)
+```
+
+### Install Specific Rails Version
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install Rails 7",
+    packages=["rails:7.0.4"],
+)
+```
+
+### Testing Framework
+
+```python
+from pyinfra.operations import gem
+
+gem.packages(
+    name="Install RSpec and tools",
+    packages=[
+        "rspec",
+        "rspec-rails",
+        "factory_bot",
+        "faker",
+    ],
+)
+```
+
+## Ruby Gem Tips
+
+<AccordionGroup>
+  <Accordion title="Using Bundler">
+    For Ruby projects, use Bundler to manage dependencies:
+    
+    ```python
+    from pyinfra.operations import gem, files, server
+    
+    # Install bundler
+    gem.packages(
+        name="Install Bundler",
+        packages=["bundler"],
+    )
+    
+    # Upload Gemfile
+    files.put(
+        name="Upload Gemfile",
+        src="local/Gemfile",
+        dest="/app/Gemfile",
+    )
+    
+    # Install gems from Gemfile
+    server.shell(
+        name="Install gems with Bundler",
+        commands=["cd /app && bundle install"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="System vs User Gems">
+    **System gems** (default):
+    - Installed globally
+    - May require sudo
+    
+    **User gems** (with --user-install):
+    - Installed in user's home directory
+    - No sudo required
+    
+    ```python
+    from pyinfra.operations import server
+    
+    # Install as user
+    server.shell(
+        name="Install gem as user",
+        commands=["gem install rails --user-install"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Update All Gems">
+    Update all installed gems:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Update all gems",
+        commands=["gem update"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="List Installed Gems">
+    View installed gems:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="List installed gems",
+        commands=["gem list"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Clean Up Old Versions">
+    Remove old gem versions:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Clean up old gem versions",
+        commands=["gem cleanup"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Custom Gem Sources">
+    Add custom gem sources:
+    
+    ```python
+    from pyinfra.operations import server
+    
+    server.shell(
+        name="Add custom gem source",
+        commands=[
+            "gem sources --add https://gems.company.com",
+        ],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Bundler for Projects">
+    ```python
+    from pyinfra.operations import gem, files, server
+    
+    # Install bundler
+    gem.packages(
+        name="Install Bundler",
+        packages=["bundler"],
+    )
+    
+    # Use Gemfile and Gemfile.lock
+    files.put(
+        name="Upload Gemfile",
+        src="local/Gemfile",
+        dest="/app/Gemfile",
+    )
+    
+    files.put(
+        name="Upload Gemfile.lock",
+        src="local/Gemfile.lock",
+        dest="/app/Gemfile.lock",
+    )
+    
+    # Install exact versions
+    server.shell(
+        name="Bundle install",
+        commands=["cd /app && bundle install --deployment"],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Pin Important Versions">
+    ```python
+    from pyinfra.operations import gem
+    
+    gem.packages(
+        name="Install with pinned versions",
+        packages=[
+            "rails:7.0.4",
+            "bundler:2.4.10",
+        ],
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Install System Dependencies First">
+    ```python
+    from pyinfra.operations import apt, gem
+    
+    # Install system dependencies
+    apt.packages(
+        name="Install Ruby and dependencies",
+        packages=[
+            "ruby-full",
+            "build-essential",
+            "libpq-dev",  # For pg gem
+            "libsqlite3-dev",  # For sqlite3 gem
+        ],
+    )
+    
+    # Then install gems
+    gem.packages(
+        name="Install Ruby gems",
+        packages=["rails", "pg"],
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Important Notes
+
+<Warning>
+  Installing gems system-wide may require sudo/root privileges. Consider using Bundler for project-specific gem management.
+</Warning>
+
+<Note>
+  Gem version pinning uses `:` (colon) as the separator, not `==` like pip or `@` like npm.
+</Note>
+
+<Tip>
+  For production Rails applications, always use Bundler with `--deployment` flag to ensure consistent gem versions.
+</Tip>

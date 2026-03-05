@@ -1,0 +1,49 @@
+---
+title: lxd
+description: Manage LXD containers
+---
+
+The LXD modules manage LXD containers.
+
+## Functions
+
+### `lxd.container`
+
+Add/remove LXD containers.
+
+```python
+lxd.container(
+    id,
+    present=True,
+    image="ubuntu:16.04",
+)
+```
+
+<ParamField name="id" type="str" required>
+  Name/identifier for the container
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the container should be present or absent
+</ParamField>
+
+<ParamField name="image" type="str" default="ubuntu:16.04">
+  Image to base the container on
+</ParamField>
+
+<Note>
+This operation does not check if an existing container is based on the specified image.
+</Note>
+
+## Examples
+
+```python
+from pyinfra.operations import lxd
+
+# Add an ubuntu container
+lxd.container(
+    name="Add an ubuntu container",
+    id="ubuntu19",
+    image="ubuntu:19.10",
+)
+```

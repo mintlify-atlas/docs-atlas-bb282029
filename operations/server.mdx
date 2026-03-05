@@ -1,0 +1,420 @@
+---
+title: server
+description: OS-level server operations for POSIX systems
+---
+
+The server module takes care of os-level state. Targets POSIX compatibility, tested on Linux/BSD.
+
+## Functions
+
+### `server.reboot`
+
+Reboot the server and wait for reconnection.
+
+```python
+server.reboot(
+    delay=10,
+    interval=1,
+    reboot_timeout=300,
+)
+```
+
+<ParamField name="delay" type="int" default="10">
+  Number of seconds to wait before attempting reconnect
+</ParamField>
+
+<ParamField name="interval" type="int" default="1">
+  Interval (s) between reconnect attempts
+</ParamField>
+
+<ParamField name="reboot_timeout" type="int" default="300">
+  Total time before giving up reconnecting
+</ParamField>
+
+### `server.wait`
+
+Waits for a port to come active on the target machine. Requires netstat, checks every second.
+
+```python
+server.wait(port)
+```
+
+<ParamField name="port" type="int" required>
+  Port number to wait for
+</ParamField>
+
+### `server.shell`
+
+Run raw shell code on server during a deploy.
+
+```python
+server.shell(commands)
+```
+
+<ParamField name="commands" type="str | list[str]" required>
+  Command or list of commands to execute on the remote server
+</ParamField>
+
+### `server.script`
+
+Upload and execute a local script on the remote host.
+
+```python
+server.script(
+    src,
+    args=(),
+)
+```
+
+<ParamField name="src" type="str" required>
+  Local script filename to upload & execute
+</ParamField>
+
+<ParamField name="args" type="tuple" default="()">
+  Iterable to pass as arguments to the script
+</ParamField>
+
+### `server.script_template`
+
+Generate, upload and execute a local script template on the remote host.
+
+```python
+server.script_template(
+    src,
+    args=(),
+    **data
+)
+```
+
+<ParamField name="src" type="str" required>
+  Local script template filename
+</ParamField>
+
+<ParamField name="args" type="tuple" default="()">
+  Iterable to pass as arguments to the script
+</ParamField>
+
+<ParamField name="**data">
+  Template variables
+</ParamField>
+
+### `server.modprobe`
+
+Load/unload kernel modules.
+
+```python
+server.modprobe(
+    module,
+    present=True,
+    force=False,
+)
+```
+
+<ParamField name="module" type="str" required>
+  Name of the module to manage
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the module should be loaded or not
+</ParamField>
+
+<ParamField name="force" type="bool" default="False">
+  Whether to force any add/remove modules
+</ParamField>
+
+### `server.mount`
+
+Manage mounted filesystems.
+
+```python
+server.mount(
+    path,
+    mounted=True,
+    options=None,
+    device=None,
+    fs_type=None,
+)
+```
+
+<ParamField name="path" type="str" required>
+  The path of the mounted filesystem
+</ParamField>
+
+<ParamField name="mounted" type="bool" default="True">
+  Whether the filesystem should be mounted
+</ParamField>
+
+<ParamField name="options" type="list[str]" default="None">
+  The mount options
+</ParamField>
+
+<ParamField name="device" type="str" default="None">
+  The device to mount
+</ParamField>
+
+<ParamField name="fs_type" type="str" default="None">
+  The filesystem type
+</ParamField>
+
+<Note>
+This operation does not attempt to modify the on disk fstab file - for that you should use the `files.line` operation.
+</Note>
+
+### `server.hostname`
+
+Set the system hostname using `hostnamectl` or `hostname` on older systems.
+
+```python
+server.hostname(
+    hostname,
+    hostname_file=None,
+)
+```
+
+<ParamField name="hostname" type="str" required>
+  The hostname that should be set
+</ParamField>
+
+<ParamField name="hostname_file" type="str" default="None">
+  The file that permanently sets the hostname
+</ParamField>
+
+### `server.timezone`
+
+Set the system timezone.
+
+```python
+server.timezone(timezone)
+```
+
+<ParamField name="timezone" type="str" required>
+  The timezone to set (e.g. `Europe/Amsterdam`, `UTC`)
+</ParamField>
+
+### `server.sysctl`
+
+Edit sysctl configuration.
+
+```python
+server.sysctl(
+    key,
+    value,
+    persist=False,
+    persist_file="/etc/sysctl.conf",
+)
+```
+
+<ParamField name="key" type="str" required>
+  Name of the sysctl setting to ensure
+</ParamField>
+
+<ParamField name="value" type="str | int | list" required>
+  The value or list of values the sysctl should be
+</ParamField>
+
+<ParamField name="persist" type="bool" default="False">
+  Whether to write this sysctl to the config
+</ParamField>
+
+<ParamField name="persist_file" type="str" default="/etc/sysctl.conf">
+  File to write the sysctl to persist on reboot
+</ParamField>
+
+### `server.service`
+
+Manage the state of services. This command checks for the presence of all the Linux init systems pyinfra can handle and executes the relevant operation.
+
+```python
+server.service(
+    service,
+    running=True,
+    restarted=False,
+    reloaded=False,
+    command=None,
+    enabled=None,
+)
+```
+
+<ParamField name="service" type="str" required>
+  Name of the service to manage
+</ParamField>
+
+<ParamField name="running" type="bool" default="True">
+  Whether the service should be running
+</ParamField>
+
+<ParamField name="restarted" type="bool" default="False">
+  Whether the service should be restarted
+</ParamField>
+
+<ParamField name="reloaded" type="bool" default="False">
+  Whether the service should be reloaded
+</ParamField>
+
+<ParamField name="command" type="str" default="None">
+  Custom command execute
+</ParamField>
+
+<ParamField name="enabled" type="bool" default="None">
+  Whether this service should be enabled/disabled on boot
+</ParamField>
+
+### `server.packages`
+
+Add or remove system packages. This command checks for the presence of all the system package managers pyinfra can handle and executes the relevant operation.
+
+```python
+server.packages(
+    packages,
+    present=True,
+)
+```
+
+<ParamField name="packages" type="str | list[str]" required>
+  List of packages to ensure
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the packages should be installed
+</ParamField>
+
+### `server.group`
+
+Add/remove system groups.
+
+```python
+server.group(
+    group,
+    present=True,
+    system=False,
+    gid=None,
+)
+```
+
+<ParamField name="group" type="str" required>
+  Name of the group to ensure
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether the group should be present or not
+</ParamField>
+
+<ParamField name="system" type="bool" default="False">
+  Whether to create a system group
+</ParamField>
+
+<ParamField name="gid" type="int | str" default="None">
+  Use a specific groupid number
+</ParamField>
+
+### `server.user`
+
+Add/remove/update system users & their ssh `authorized_keys`.
+
+```python
+server.user(
+    user,
+    present=True,
+    home=None,
+    shell=None,
+    group=None,
+    groups=None,
+    append=False,
+    public_keys=None,
+    delete_keys=False,
+    ensure_home=True,
+    create_home=False,
+    system=False,
+    uid=None,
+    comment=None,
+    unique=True,
+    password=None,
+)
+```
+
+<ParamField name="user" type="str" required>
+  Name of the user to ensure
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether this user should exist
+</ParamField>
+
+<ParamField name="home" type="str" default="None">
+  The users home directory
+</ParamField>
+
+<ParamField name="shell" type="str" default="None">
+  The users shell
+</ParamField>
+
+<ParamField name="group" type="str" default="None">
+  The users primary group
+</ParamField>
+
+<ParamField name="groups" type="list[str]" default="None">
+  The users secondary groups
+</ParamField>
+
+<ParamField name="public_keys" type="str | list[str]" default="None">
+  List of public keys to attach to this user
+</ParamField>
+
+<ParamField name="ensure_home" type="bool" default="True">
+  Whether to ensure the home directory exists
+</ParamField>
+
+<ParamField name="system" type="bool" default="False">
+  Whether to create a system account
+</ParamField>
+
+### `server.locale`
+
+Enable/Disable locale.
+
+```python
+server.locale(
+    locale,
+    present=True,
+)
+```
+
+<ParamField name="locale" type="str" required>
+  Name of the locale to enable/disable
+</ParamField>
+
+<ParamField name="present" type="bool" default="True">
+  Whether this locale should be present or not
+</ParamField>
+
+## Examples
+
+```python
+from pyinfra.operations import server
+
+# Reboot the server
+server.reboot(
+    name="Reboot the server and wait to reconnect",
+    delay=60,
+    reboot_timeout=600,
+)
+
+# Run shell commands
+server.shell(
+    name="Run lxd auto init",
+    commands=["lxd init --auto"],
+)
+
+# Ensure a user exists
+server.user(
+    name="Ensure myweb user exists",
+    user="myweb",
+    shell="/bin/bash",
+)
+
+# Set timezone
+server.timezone(
+    name="Set the timezone to Europe/Amsterdam",
+    timezone="Europe/Amsterdam",
+)
+```

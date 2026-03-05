@@ -1,0 +1,158 @@
+---
+title: "CLI Overview"
+description: "Introduction to the pyinfra command-line interface"
+---
+
+## Introduction
+
+pyinfra provides a powerful command-line interface for managing the state of one or more servers. It can be used for app/service deployment, configuration management, and ad-hoc command execution.
+
+## Basic Usage
+
+The pyinfra CLI follows this general pattern:
+
+```bash
+pyinfra INVENTORY OPERATIONS [OPTIONS]
+```
+
+Where:
+- **INVENTORY**: Defines the target hosts (file, hostname, or comma-separated list)
+- **OPERATIONS**: Specifies what to execute (deploy files, operations, commands, or facts)
+- **OPTIONS**: Additional flags to control behavior
+
+## Command Modes
+
+pyinfra supports several different operation modes:
+
+### Deploy Files
+
+Execute one or more Python deploy files:
+
+```bash
+pyinfra INVENTORY deploy_web.py [deploy_db.py]...
+```
+
+### Operations
+
+Run a single operation directly:
+
+```bash
+pyinfra INVENTORY server.user pyinfra home=/home/pyinfra
+```
+
+### Exec Commands
+
+Execute arbitrary shell commands:
+
+```bash
+pyinfra INVENTORY exec -- echo "hello world"
+```
+
+### Facts
+
+Gather facts from target hosts:
+
+```bash
+pyinfra INVENTORY fact server.LinuxName [server.Users]...
+pyinfra INVENTORY fact files.File path=/path/to/file
+```
+
+### Debug Inventory
+
+Inspect inventory hosts and data:
+
+```bash
+pyinfra INVENTORY debug-inventory
+```
+
+## Inventory Formats
+
+pyinfra accepts inventory in multiple formats:
+
+### Inventory File
+
+```bash
+pyinfra inventory.py deploy.py
+```
+
+### Single Host
+
+```bash
+pyinfra host.example.com deploy.py
+```
+
+### Multiple Hosts
+
+```bash
+pyinfra host-1.net,host-2.net,@local deploy.py
+```
+
+## Common Workflows
+
+### Dry Run
+
+Preview changes without executing:
+
+```bash
+pyinfra inventory.py deploy.py --dry
+```
+
+### Verbose Output
+
+Increase verbosity to see more details:
+
+```bash
+pyinfra inventory.py deploy.py -v    # Show meta info
+pyinfra inventory.py deploy.py -vv   # Show input
+pyinfra inventory.py deploy.py -vvv  # Show output
+```
+
+### Limit Hosts
+
+Restrict execution to specific hosts or groups:
+
+```bash
+pyinfra inventory.py deploy.py --limit webservers
+pyinfra inventory.py deploy.py --limit "web-*"
+```
+
+### Auto-Execute
+
+Skip confirmation prompts:
+
+```bash
+pyinfra inventory.py deploy.py -y
+```
+
+## Environment Variables
+
+Some options can be set via environment variables:
+
+- `PYINFRA_YES`: Equivalent to `-y/--yes` flag for auto-execution
+
+## Getting Help
+
+Display help information:
+
+```bash
+pyinfra --help
+pyinfra -h
+```
+
+Check version:
+
+```bash
+pyinfra --version
+```
+
+Get support information:
+
+```bash
+pyinfra --support
+```
+
+## Next Steps
+
+- Learn about [CLI commands](/cli/commands) for detailed command modes
+- Explore [CLI arguments](/cli/arguments) for all available flags and options
+- Read the full documentation at [docs.pyinfra.com](https://docs.pyinfra.com)

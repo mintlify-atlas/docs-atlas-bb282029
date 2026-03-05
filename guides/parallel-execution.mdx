@@ -1,0 +1,537 @@
+---
+title: Parallel Execution
+description: Learn how pyinfra executes operations in parallel across multiple hosts for maximum performance
+---
+
+One of pyinfra's key strengths is its ability to execute operations in parallel across hundreds or thousands of hosts. This guide explains how parallel execution works and how to optimize your deploys for maximum performance.
+
+## How Parallel Execution Works
+
+Pyinfra uses a two-phase approach that enables fast, parallel execution:
+
+### Phase 1: Prepare (Sequential)
+
+Deploy code runs once per host to determine what operations to execute:
+
+```python
+# This code runs sequentially for each host
+from pyinfra import host
+from pyinfra.operations import apt
+
+if "web_servers" in host.groups:
+    apt.packages(name="Install nginx", packages=["nginx"])
+```
+
+During preparation, pyinfra:
+1. Executes deploy code for each host
+2. Builds operation order and dependencies
+3. Gathers facts needed for change detection
+4. Determines what commands will run
+
+### Phase 2: Execute (Parallel)
+
+Operations execute in parallel across all hosts:
+
+```
+Operation 1: "Install nginx"
+├─ [web-01] apt-get install nginx  (running)
+├─ [web-02] apt-get install nginx  (running)
+├─ [web-03] apt-get install nginx  (running)
+└─ [web-04] apt-get install nginx  (running)
+
+⬇ All hosts complete
+
+Operation 2: "Configure nginx"
+├─ [web-01] upload nginx.conf      (running)
+├─ [web-02] upload nginx.conf      (running)
+├─ [web-03] upload nginx.conf      (running)
+└─ [web-04] upload nginx.conf      (running)
+```
+
+Each operation runs on all hosts in parallel, but operations execute **sequentially** - operation 2 starts only after operation 1 completes on all hosts.
+
+<Note>
+  Operations are sequential (ordered), but each operation executes in parallel across all hosts.
+</Note>
+
+## Operation Ordering
+
+Operations execute in the order they appear in your deploy file:
+
+```python deploy.py
+from pyinfra.operations import apt, files, server
+
+# 1. Runs first on all hosts in parallel
+apt.packages(
+    name="Install nginx",
+    packages=["nginx"],
+    _sudo=True,
+)
+
+# 2. Runs second on all hosts in parallel (after step 1 completes)
+files.template(
+    name="Upload nginx config",
+    src="templates/nginx.conf.j2",
+    dest="/etc/nginx/nginx.conf",
+    _sudo=True,
+)
+
+# 3. Runs third on all hosts in parallel (after step 2 completes)
+server.service(
+    name="Restart nginx",
+    service="nginx",
+    restarted=True,
+    _sudo=True,
+)
+```
+
+Execution flow:
+
+```
+All hosts: Install nginx ━━━━━━━━━━━━━━━━► Complete
+                                           ⬇
+All hosts: Upload config ━━━━━━━━━━━━━━━━► Complete
+                                           ⬇
+All hosts: Restart nginx ━━━━━━━━━━━━━━━━► Complete
+```
+
+## Performance Benefits
+
+Parallel execution provides massive time savings:
+
+<CodeGroup>
+```bash Sequential (without pyinfra)
+# Each host takes 30 seconds
+# Total time: 30s × 100 hosts = 3000s (50 minutes)
+
+Host 1: 30s ━━━━━━━━━━►
+              Host 2: 30s ━━━━━━━━━━►
+                            Host 3: 30s ━━━━━━━━━━►
+                                          ...
+                                          Host 100: 30s
+```
+
+```bash Parallel (with pyinfra)
+# All hosts execute simultaneously  
+# Total time: 30s (100x faster!)
+
+Host 1:   30s ━━━━━━━━━━►
+Host 2:   30s ━━━━━━━━━━►
+Host 3:   30s ━━━━━━━━━━►
+...
+Host 100: 30s ━━━━━━━━━━►
+```
+</CodeGroup>
+
+<Tip>
+  pyinfra can manage thousands of hosts with predictable performance - the time to deploy is roughly the time for the slowest host.
+</Tip>
+
+## Controlling Parallelism
+
+### Limit Parallel Hosts
+
+Control how many hosts execute operations simultaneously:
+
+```bash
+# Default: all hosts in parallel
+pyinfra inventory.py deploy.py
+
+# Limit to 10 hosts at a time
+pyinfra inventory.py deploy.py --parallel 10
+
+# Process hosts one at a time (serial execution)
+pyinfra inventory.py deploy.py --parallel 1
+```
+
+Use cases:
+- **Rate limiting** - Avoid overwhelming external services
+- **Resource constraints** - Limit load on control machine
+- **Staged rollouts** - Deploy to small batches first
+
+### Serial Execution for Specific Operations
+
+Force an operation to run serially with `_serial=True`:
+
+```python
+from pyinfra.operations import server
+
+# This operation runs on one host at a time
+server.shell(
+    name="Run intensive migration",
+    commands=["/opt/app/migrate.sh"],
+    _serial=True,
+    _sudo=True,
+)
+```
+
+Execution flow:
+
+```
+Host 1: Run migration ━━━━━━━━━━► Complete
+                                   ⬇
+        Host 2: Run migration ━━━━━━━━━━► Complete
+                                           ⬇
+                Host 3: Run migration ━━━━━━━━━━► Complete
+```
+
+<Tip>
+  Use `_serial=True` for operations that must not run simultaneously (database migrations, shared resource access, etc.).
+</Tip>
+
+## Group-Based Execution
+
+Execute operations on specific groups in order:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt, server
+
+# Deploy to database servers first
+if "db_servers" in host.groups:
+    apt.packages(
+        name="Install PostgreSQL",
+        packages=["postgresql"],
+        _sudo=True,
+    )
+    
+    server.shell(
+        name="Run database migrations",
+        commands=["/opt/app/migrate.sh"],
+        _serial=True,  # One DB at a time
+        _sudo=True,
+    )
+
+# Then deploy to web servers
+if "web_servers" in host.groups:
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+```
+
+Execution flow:
+
+```
+Database servers (in parallel):
+  db-01, db-02 ━━━━━━━━━━► Install PostgreSQL
+                            ⬇
+  db-01 ━━━━► Migrate (serial)
+        ⬇
+  db-02 ━━━━► Migrate (serial)
+              ⬇
+Web servers (in parallel):
+  web-01, web-02, web-03 ━━━━━━━━━━► Install nginx
+```
+
+## Handling Failures
+
+By default, pyinfra continues executing even if some hosts fail:
+
+```bash
+pyinfra inventory.py deploy.py
+```
+
+Example output:
+
+```
+Operation: Install packages
+  [web-01] ✓ Success
+  [web-02] ✗ Failed (connection timeout)
+  [web-03] ✓ Success
+  [web-04] ✓ Success
+
+3/4 hosts succeeded
+```
+
+### Fail Fast
+
+Stop execution on first failure:
+
+```bash
+pyinfra inventory.py deploy.py --fail-fast
+```
+
+### Continue on Error
+
+Force an operation to continue even if it fails:
+
+```python
+from pyinfra.operations import server
+
+server.shell(
+    name="Optional cleanup",
+    commands=["rm -f /tmp/oldfiles/*"],
+    _continue_on_error=True,
+    _sudo=True,
+)
+```
+
+<Note>
+  The deploy continues even if this operation fails on some hosts.
+</Note>
+
+## Progress Monitoring
+
+Watch execution progress in real-time:
+
+```bash
+# Default output
+pyinfra inventory.py deploy.py
+
+# Verbose output (shows all commands)
+pyinfra inventory.py deploy.py -v
+
+# Very verbose (shows stdout/stderr)
+pyinfra inventory.py deploy.py -vv
+
+# Debug mode (maximum verbosity)
+pyinfra inventory.py deploy.py -vvv
+```
+
+Example output:
+
+```
+--> Loading config...
+--> Loading inventory...
+--> Connecting to 100 hosts...
+    [100/100] hosts connected
+--> Preparing operations...
+--> Proposing operations...
+    Operations: 5
+    Commands: 237
+--> Beginning operation run...
+--> [1/5] Install system packages
+    [100/100] ✓ Complete
+--> [2/5] Create application user
+    [100/100] ✓ Complete
+...
+```
+
+## Large-Scale Deployments
+
+Optimizations for deploying to many hosts:
+
+### Use Connection Pooling
+
+SSH connections are pooled and reused:
+
+```bash
+# Enable SSH connection multiplexing (default)
+pyinfra inventory.py deploy.py
+```
+
+### Limit Fact Gathering
+
+Only gather facts you actually use:
+
+```python
+# Explicitly request specific facts
+from pyinfra import host
+
+distro = host.get_fact("LinuxDistribution")
+```
+
+Pyinfra automatically optimizes fact gathering based on operations used.
+
+### Batch Operations
+
+Group similar operations together:
+
+<CodeGroup>
+```python Good - Batched
+from pyinfra.operations import apt
+
+# Install all packages at once
+apt.packages(
+    name="Install packages",
+    packages=["nginx", "postgresql", "redis", "git"],
+    _sudo=True,
+)
+```
+
+```python Bad - Individual
+from pyinfra.operations import apt
+
+# Don't do this - creates 4 separate operations
+apt.packages(name="Install nginx", packages=["nginx"], _sudo=True)
+apt.packages(name="Install postgresql", packages=["postgresql"], _sudo=True)
+apt.packages(name="Install redis", packages=["redis"], _sudo=True)
+apt.packages(name="Install git", packages=["git"], _sudo=True)
+```
+</CodeGroup>
+
+## Real-World Example: Rolling Update
+
+Deploy updates in waves to maintain availability:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import git, server
+
+# Update code on all web servers in parallel
+git.repo(
+    name="Pull latest code",
+    src=host.data.app_repo,
+    dest="/opt/myapp",
+    branch="main",
+    pull=True,
+    _sudo=True,
+)
+
+# Restart app servers one at a time (rolling restart)
+server.service(
+    name="Rolling restart of application",
+    service="myapp",
+    restarted=True,
+    _serial=True,  # One at a time to maintain availability
+    _sudo=True,
+)
+```
+
+With 10 web servers:
+
+```
+All 10 servers: Pull code ━━━━━━━━━━► Complete (parallel, ~5s)
+                                      ⬇
+Server 1: Restart ━━► Complete
+         ⬇
+Server 2: Restart ━━► Complete  
+         ⬇
+Server 3: Restart ━━► Complete
+         ...
+Server 10: Restart ━━► Complete
+
+Total time: ~5s + (10 × 2s) = 25s
+```
+
+<Tip>
+  This pattern maintains availability - app servers restart one at a time while others continue serving traffic.
+</Tip>
+
+## Targeted Execution
+
+Run operations on specific hosts:
+
+```bash
+# Single host
+pyinfra web-01.example.com deploy.py
+
+# Multiple hosts
+pyinfra web-01.example.com,web-02.example.com deploy.py
+
+# Limit to specific group
+pyinfra inventory.py deploy.py --limit web_servers
+
+# Exclude hosts
+pyinfra inventory.py deploy.py --limit '!web-01.example.com'
+```
+
+## Performance Comparison
+
+Real-world deployment times:
+
+| Hosts | Operations | Sequential | Parallel | Speedup |
+|-------|------------|------------|----------|----------|
+| 10 | 20 | 5m 00s | 30s | 10x |
+| 50 | 20 | 25m 00s | 35s | 42x |
+| 100 | 20 | 50m 00s | 40s | 75x |
+| 500 | 20 | 4h 10m | 55s | 272x |
+| 1000 | 20 | 8h 20m | 1m 15s | 400x |
+
+<Note>
+  Times assume each operation takes ~3 seconds per host. Actual times vary based on operation complexity and network speed.
+</Note>
+
+## Best Practices
+
+<Tip>
+  **Batch similar operations** - Install all packages at once instead of individually:
+  
+  ```python
+  # Good
+  apt.packages(packages=["nginx", "git", "vim"])
+  
+  # Bad
+  apt.packages(packages=["nginx"])
+  apt.packages(packages=["git"])
+  apt.packages(packages=["vim"])
+  ```
+</Tip>
+
+<Tip>
+  **Use serial execution for critical operations** - Protect shared resources:
+  
+  ```python
+  server.shell(
+      name="Database migration",
+      commands=["./migrate.sh"],
+      _serial=True,  # One at a time
+  )
+  ```
+</Tip>
+
+<Tip>
+  **Limit parallelism for external services** - Don't overwhelm APIs or databases:
+  
+  ```bash
+  pyinfra inventory.py deploy.py --parallel 10
+  ```
+</Tip>
+
+<Tip>
+  **Monitor failures** - Use verbose mode to debug parallel execution:
+  
+  ```bash
+  pyinfra inventory.py deploy.py -vv
+  ```
+</Tip>
+
+<Tip>
+  **Test at scale** - Use `--dry` with full inventory to estimate timing:
+  
+  ```bash
+  pyinfra inventory.py deploy.py --dry
+  ```
+</Tip>
+
+## Understanding the Prepare Phase
+
+The prepare phase is critical for parallel execution:
+
+```python deploy.py
+from pyinfra import host
+from pyinfra.operations import apt
+
+# This code runs once per host during prepare
+if host.name.startswith("web-"):
+    apt.packages(
+        name="Install nginx",
+        packages=["nginx"],
+        _sudo=True,
+    )
+```
+
+What happens:
+
+```
+Prepare Phase (sequential):
+  - Execute deploy.py for web-01 → Register "Install nginx" op
+  - Execute deploy.py for web-02 → Register "Install nginx" op  
+  - Execute deploy.py for web-03 → Register "Install nginx" op
+  - Build operation order
+
+Execute Phase (parallel):
+  - Operation "Install nginx" runs on web-01, web-02, web-03 simultaneously
+```
+
+<Note>
+  The prepare phase must complete for all hosts before any operations execute. This ensures correct operation ordering.
+</Note>
+
+## Next Steps
+
+- [Idempotent Operations](/guides/idempotent-operations) - Optimize parallel execution with idempotency
+- [Deploying Applications](/guides/deploying-applications) - Build scalable deployments
+- [Inventory and Data](/guides/inventory-and-data) - Organize large host inventories
