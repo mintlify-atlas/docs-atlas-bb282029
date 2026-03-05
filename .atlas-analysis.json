@@ -1,0 +1,223 @@
+{
+  "projectType": "framework",
+  "projectName": "pyinfra",
+  "projectDescription": "Infrastructure automation framework that turns Python code into shell commands for configuration management and deployment.",
+  "theme": "aspen",
+  "primaryColor": "#0aaf51",
+  "lightColor": "#ade6c5",
+  "darkColor": "#23342b",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/operations",
+              "concepts/facts",
+              "concepts/inventory",
+              "concepts/state",
+              "concepts/connectors"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/getting-started-tutorial",
+              "guides/using-operations",
+              "guides/inventory-and-data",
+              "guides/deploying-applications",
+              "guides/idempotent-operations",
+              "guides/parallel-execution"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/commands",
+              "cli/arguments"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/writing-operations",
+              "advanced/writing-facts",
+              "advanced/writing-connectors",
+              "advanced/performance-tuning",
+              "advanced/debugging"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Operations",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "operations/overview"
+            ]
+          },
+          {
+            "group": "Package Managers",
+            "pages": [
+              "operations/apt",
+              "operations/yum",
+              "operations/dnf",
+              "operations/apk",
+              "operations/pacman",
+              "operations/brew",
+              "operations/choco",
+              "operations/pkg",
+              "operations/zypper"
+            ]
+          },
+          {
+            "group": "Language Packages",
+            "pages": [
+              "operations/pip",
+              "operations/pipx",
+              "operations/npm",
+              "operations/gem",
+              "operations/cargo"
+            ]
+          },
+          {
+            "group": "Service Management",
+            "pages": [
+              "operations/systemd",
+              "operations/sysvinit",
+              "operations/upstart",
+              "operations/launchd",
+              "operations/openrc",
+              "operations/runit"
+            ]
+          },
+          {
+            "group": "System Operations",
+            "pages": [
+              "operations/server",
+              "operations/files",
+              "operations/crontab",
+              "operations/ssh"
+            ]
+          },
+          {
+            "group": "Containers",
+            "pages": [
+              "operations/docker",
+              "operations/lxd"
+            ]
+          },
+          {
+            "group": "Databases",
+            "pages": [
+              "operations/mysql",
+              "operations/postgres"
+            ]
+          },
+          {
+            "group": "Version Control",
+            "pages": [
+              "operations/git"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "operations/iptables",
+              "operations/selinux"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview"
+            ]
+          },
+          {
+            "group": "Core API",
+            "pages": [
+              "api/deploy",
+              "api/operation",
+              "api/host",
+              "api/inventory",
+              "api/state",
+              "api/config"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "api/commands"
+            ]
+          },
+          {
+            "group": "Connectors",
+            "pages": [
+              "api/connectors/ssh",
+              "api/connectors/docker",
+              "api/connectors/local",
+              "api/connectors/terraform",
+              "api/connectors/vagrant"
+            ]
+          },
+          {
+            "group": "Facts",
+            "pages": [
+              "api/facts/overview",
+              "api/facts/server",
+              "api/facts/files",
+              "api/facts/packages"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Declarative operations for infrastructure management",
+    "Multiple connectors (SSH, Docker, Podman, local)",
+    "40+ operations modules for package managers, services, files, and databases",
+    "Facts system for gathering host information",
+    "Idempotent operations with dry-run support",
+    "Parallel execution across thousands of hosts",
+    "Python-based configuration instead of YAML"
+  ],
+  "publicApiSurface": [
+    "pyinfra.api.deploy",
+    "pyinfra.api.operation",
+    "pyinfra.api.Host",
+    "pyinfra.api.Inventory",
+    "pyinfra.api.State",
+    "pyinfra.api.Config",
+    "pyinfra.operations.apt",
+    "pyinfra.operations.yum",
+    "pyinfra.operations.files",
+    "pyinfra.operations.server",
+    "pyinfra.operations.systemd",
+    "pyinfra.operations.docker",
+    "pyinfra.operations.git",
+    "pyinfra.connectors.ssh",
+    "pyinfra.connectors.docker",
+    "pyinfra.connectors.local",
+    "pyinfra CLI"
+  ]
+}
